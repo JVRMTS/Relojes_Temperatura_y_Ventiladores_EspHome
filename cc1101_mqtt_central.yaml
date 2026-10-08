@@ -1,0 +1,116 @@
+substitutions:
+  device_name: cc1101-mqtt-central
+  friendly_name: CC1101 MQTT Central
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.9.1
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+    advanced:
+      minimum_chip_revision: "3.0"     
+      sram1_as_iram: true
+
+logger:
+
+
+api:
+  encryption:
+    key: !secret api_key_reloj
+
+ota:
+  - platform: esphome
+    encryption:
+    
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  fast_connect: true
+  output_power: 8.5dB
+  power_save_mode: none
+  manual_ip:
+    static_ip: 192.168.1.18
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
+
+spi:
+  clk_pin: GPIO18
+  miso_pin: GPIO19
+  mosi_pin: GPIO23
+
+cc1101:
+  id: radio
+  cs_pin: GPIO5
+  frequency: 433.92MHz
+  output_power: 10
+  modulation_type: ASK/OOK
+  symbol_rate: 5000
+  filter_bandwidth: 812kHz
+  packet_mode: false
+  crc_enable: false
+  whitening: false
+
+remote_transmitter:
+  # El sketch original usa GPIO2 como salida de datos GDO0.
+  pin: GPIO2
+  carrier_duty_percent: 100%
+  non_blocking: true
+  on_transmit:
+    - cc1101.begin_tx:
+        id: radio
+  on_complete:
+    - cc1101.set_idle:
+        id: radio
+
+globals:
+  - id: rc_code
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  - id: rc_code_valid
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+mqtt:
+  broker: 192.168.1.203
+  port: 1883
+  username: !secret mqtt_username
+  password: !secret mqtt_password
+  on_json_message:
+    - topic: "casa/+/ventilador"
+      then:
+        - lambda: |-
+            id(rc_code_valid) = false;
+            if (!x.containsKey("opcion") || !x["opcion"].is<uint32_t>()) {
+              ESP_LOGW("rf_fan", "Mensaje ignorado: falta 'opcion' uint32");
+              return;
+            }
+
+            const uint32_t value = x["opcion"].as<uint32_t>();
+            std::string bits;
+            bits.reserve(32);
+            for (int bit = 31; bit >= 0; --bit) {
+              bits += ((value >> bit) & 1U) ? '1' : '0';
+            }
+            id(rc_code) = bits;
+            id(rc_code_valid) = true;
+        - if:
+            condition:
+              lambda: "return id(rc_code_valid);"
+            then:
+              - remote_transmitter.transmit_rc_switch_raw:
+                  code: !lambda "return id(rc_code);"
+                  protocol:
+                    pulse_length: 390
+                    sync: [23, 1]
+                    zero: [1, 2]
+                    one: [2, 1]
+                    inverted: true
+                  repeat:
+                    times: 2
+                    wait_time: 10ms

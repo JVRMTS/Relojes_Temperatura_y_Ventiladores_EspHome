@@ -1,0 +1,63 @@
+substitutions:
+  device_name: cc1101-captura-mando
+  friendly_name: CC1101 Captura Mando
+  wifi_ssid: !secret wifi_ssid
+  wifi_password: !secret wifi_password
+  api_key_reloj: !secret api_key_reloj
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.9.1
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+    advanced:
+      minimum_chip_revision: "3.0"     
+      sram1_as_iram: true
+
+logger:
+  level: VERY_VERBOSE
+
+api:
+  encryption:
+    key: ${api_key_reloj}
+
+ota:
+  - platform: esphome
+    encryption:
+
+wifi:
+  ssid: ${wifi_ssid}
+  password: ${wifi_password}
+  fast_connect: true
+
+spi:
+  id: spi_bus
+  type: single
+  clk_pin: GPIO18
+  miso_pin: GPIO19
+  mosi_pin: GPIO23
+
+cc1101:
+  id: rf_radio
+  cs_pin: GPIO5
+  frequency: 433.92MHz
+  filter_bandwidth: 812kHz
+
+remote_receiver:
+  id: rf_receiver
+  pin: GPIO4
+  tolerance: 50%
+  filter: 100us
+  idle: 12ms
+  dump: [rc_switch, raw]
+  on_rc_switch:
+    then:
+      - logger.log:
+          format: "Mando recibido: protocolo %u, codigo decimal %llu"
+          args:
+            - x.protocol
+            - (unsigned long long) x.code

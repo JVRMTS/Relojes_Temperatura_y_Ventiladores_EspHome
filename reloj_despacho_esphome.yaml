@@ -1,0 +1,1025 @@
+substitutions:
+  device_name: reloj-despacho
+  friendly_name: Reloj despacho
+  wifi_ssid: !secret wifi_ssid
+  wifi_password: !secret wifi_password
+  api_key_reloj: !secret api_key_reloj
+  mqtt_username: !secret mqtt_username
+  mqtt_password: !secret mqtt_password
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.9.1
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+    advanced:
+      minimum_chip_revision: "3.1"
+      sram1_as_iram: true
+
+logger:
+
+api:
+  encryption:
+    key: ${api_key_reloj}
+
+ota:
+  - platform: esphome
+    encryption:
+
+wifi:
+  ssid: ${wifi_ssid}
+  password: ${wifi_password}
+  power_save_mode: none
+  manual_ip:
+    static_ip: 192.168.1.21
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
+    dns1: 192.168.1.201
+    dns2: 192.168.1.204
+  ap:
+    ssid: "${device_name} fallback"
+    password: "CAMBIAR_PASSWORD_AP"
+
+captive_portal:
+
+mqtt:
+  broker: 192.168.1.203
+  port: 1883
+  username: ${mqtt_username}
+  password: ${mqtt_password}
+  reboot_timeout: 0s
+  discovery: false
+  topic_prefix: null
+  on_json_message:
+    - topic: casa/salon/variables
+      qos: 2
+      then:
+        - lambda: |-
+            if (!x["temperatura"].isNull()) id(temperatura_salon) = x["temperatura"].as<float>();
+            if (!x["humedad"].isNull()) id(humedad_salon) = x["humedad"].as<float>();
+            if (!x["sen_termica"].isNull()) id(sensacion_salon) = x["sen_termica"].as<float>();
+    - topic: casa/aseo/variables
+      qos: 2
+      then:
+        - lambda: |-
+            if (!x["temperatura"].isNull()) id(temperatura_aseo) = x["temperatura"].as<float>();
+            if (!x["humedad"].isNull()) id(humedad_aseo) = x["humedad"].as<float>();
+            if (!x["sen_termica"].isNull()) id(sensacion_aseo) = x["sen_termica"].as<float>();
+    - topic: casa/dormitorio/variables
+      qos: 2
+      then:
+        - lambda: |-
+            if (!x["temperatura"].isNull()) id(temperatura_dormitorio) = x["temperatura"].as<float>();
+            if (!x["humedad"].isNull()) id(humedad_dormitorio) = x["humedad"].as<float>();
+            if (!x["sen_termica"].isNull()) id(sensacion_dormitorio) = x["sen_termica"].as<float>();
+
+time:
+  - platform: sntp
+    id: reloj_ntp
+    timezone: Europe/Madrid
+    servers:
+      - pool.ntp.org
+
+spi:
+  # TFT SCK/TCK = GPIO18; TFT SDI/TD1 = MOSI GPIO23; TFT TD0 = MISO GPIO19.
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+display:
+  - platform: mipi_spi
+    id: tft_display
+    model: ILI9488
+    cs_pin: GPIO15
+    # TFT O/C (D/C) = GPIO2; TFT RST = GPIO4, segun el cableado indicado.
+    dc_pin: GPIO2
+    reset_pin: GPIO4
+    # Compensa la orientacion fisica del panel; el giro horizontal se aplica en LVGL.
+    transform:
+      swap_xy: false
+      mirror_x: true
+      mirror_y: false
+    color_order: bgr
+    invert_colors: false
+    data_rate: 10MHz
+    update_interval: never
+    auto_clear_enabled: false
+
+touchscreen:
+  - platform: xpt2046
+    id: touch_panel
+    display: tft_display
+    cs_pin: GPIO21
+    transform:
+      mirror_y: true
+    update_interval: 50ms
+    threshold: 400
+    calibration:
+      x_min: 295
+      x_max: 3855
+      y_min: 386
+      y_max: 3815
+
+image:
+  - platform: file
+    file: "assets/icono_temperatura.png"
+    id: icono_temperatura
+    type: RGB
+    transparency: alpha_channel
+  - platform: file
+    file: "assets/icono_humedad.png"
+    id: icono_humedad
+    type: RGB
+    transparency: alpha_channel
+  - platform: file
+    file: "assets/icono_sensacion.png"
+    id: icono_sensacion
+    type: RGB
+    transparency: alpha_channel
+  - platform: file
+    file: "assets/logo_reloj.png"
+    id: logo_reloj
+    type: RGB
+    transparency: alpha_channel
+
+font:
+  - file: "gfonts://Roboto@bold"
+    id: FSSB24
+    size: 44
+    glyphs: " !%()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ"
+  - file: "gfonts://Roboto@bold"
+    id: FSSB18
+    size: 28
+    glyphs: " !%()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ"
+  - file: "gfonts://Roboto@bold"
+    id: FSSB30
+    size: 36
+    glyphs: " !%()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ"
+  - file: "gfonts://Roboto@bold"
+    id: FSSB12
+    size: 16
+    glyphs: " !%()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ"
+
+globals:
+  - id: ubicacion_seleccionada
+    type: int
+    initial_value: "4"
+  - id: ventilador_seleccionado
+    type: int
+    initial_value: "1"
+  - id: temperatura_salon
+    type: float
+    initial_value: "NAN"
+  - id: humedad_salon
+    type: float
+    initial_value: "NAN"
+  - id: sensacion_salon
+    type: float
+    initial_value: "NAN"
+  - id: temperatura_aseo
+    type: float
+    initial_value: "NAN"
+  - id: humedad_aseo
+    type: float
+    initial_value: "NAN"
+  - id: sensacion_aseo
+    type: float
+    initial_value: "NAN"
+  - id: temperatura_dormitorio
+    type: float
+    initial_value: "NAN"
+  - id: humedad_dormitorio
+    type: float
+    initial_value: "NAN"
+  - id: sensacion_dormitorio
+    type: float
+    initial_value: "NAN"
+  - id: temperatura_pantalla
+    type: float
+    initial_value: "NAN"
+  - id: humedad_pantalla
+    type: float
+    initial_value: "NAN"
+  - id: sensacion_pantalla
+    type: float
+    initial_value: "NAN"
+
+sensor:
+  - platform: dht
+    pin: GPIO22
+    model: DHT22
+    temperature:
+      id: temperatura_local
+      name: "${friendly_name} temperatura"
+      accuracy_decimals: 2
+    humidity:
+      id: humedad_local
+      name: "${friendly_name} humedad"
+      accuracy_decimals: 1
+    update_interval: 10s
+
+  - platform: template
+    id: sensacion_local
+    name: "${friendly_name} sensacion termica"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 2
+    update_interval: 10s
+    lambda: |-
+      const float temp_c = id(temperatura_local).state;
+      const float humidity = id(humedad_local).state;
+      if (isnan(temp_c) || isnan(humidity)) {
+        return NAN;
+      }
+      const float temp_f = temp_c * 9.0f / 5.0f + 32.0f;
+      float heat_index_f = 0.5f * (temp_f + 61.0f + ((temp_f - 68.0f) * 1.2f) + (humidity * 0.094f));
+      if (heat_index_f > 79.0f) {
+        heat_index_f = -42.379f
+          + 2.04901523f * temp_f
+          + 10.14333127f * humidity
+          - 0.22475541f * temp_f * humidity
+          - 0.00683783f * temp_f * temp_f
+          - 0.05481717f * humidity * humidity
+          + 0.00122874f * temp_f * temp_f * humidity
+          + 0.00085282f * temp_f * humidity * humidity
+          - 0.00000199f * temp_f * temp_f * humidity * humidity;
+        if (humidity < 13.0f && temp_f >= 80.0f && temp_f <= 112.0f) {
+          heat_index_f -= ((13.0f - humidity) / 4.0f) * sqrtf((17.0f - fabsf(temp_f - 95.0f)) / 17.0f);
+        } else if (humidity > 85.0f && temp_f >= 80.0f && temp_f <= 87.0f) {
+          heat_index_f += ((humidity - 85.0f) / 10.0f) * ((87.0f - temp_f) / 5.0f);
+        }
+      }
+      return (heat_index_f - 32.0f) * 5.0f / 9.0f;
+
+  - platform: wifi_signal
+    id: wifi_rssi
+    name: "${friendly_name} senal wifi"
+    update_interval: 60s
+
+script:
+  - id: enviar_comando_ventilador
+    mode: queued
+    parameters:
+      ventilador: int
+      comando: int
+    then:
+      - mqtt.publish:
+          topic: !lambda |-
+            return ventilador == 1
+              ? std::string("casa/dormitorio/ventilador")
+              : std::string("casa/salon/ventilador");
+          payload: !lambda |-
+            static const uint32_t codigos_dormitorio[] = {
+              2780856078UL, 3972038414UL, 1623228174UL, 113278734UL,
+              230719246UL, 4123033358UL, 1606450958UL, 4223696654UL,
+              4274028302UL, 1522564878UL, 4022370062UL, 3217063694UL,
+              4257251086UL, 4156587790UL, 2143321870UL, 3753934606UL
+            };
+            static const uint32_t codigos_salon[] = {
+              2780831953UL, 3972014289UL, 1623204049UL, 113254609UL,
+              230695121UL, 4123009233UL, 1606426833UL, 4223672529UL,
+              4274004177UL, 1522540753UL, 4022345937UL, 3217039569UL,
+              4257226961UL, 4156563665UL, 2143297745UL, 3753910481UL
+            };
+            if (comando < 0 || comando >= 16) {
+              return std::string("{\"opcion\":0}");
+            }
+            const uint32_t codigo = ventilador == 1
+              ? codigos_dormitorio[comando]
+              : codigos_salon[comando];
+            char json[32];
+            snprintf(json, sizeof(json), "{\"opcion\":%lu}", static_cast<unsigned long>(codigo));
+            return std::string(json);
+          qos: 2
+          retain: true
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          switch (id(ubicacion_seleccionada)) {
+            case 1:
+              id(temperatura_pantalla) = id(temperatura_salon);
+              id(humedad_pantalla) = id(humedad_salon);
+              id(sensacion_pantalla) = id(sensacion_salon);
+              break;
+            case 2:
+              id(temperatura_pantalla) = id(temperatura_aseo);
+              id(humedad_pantalla) = id(humedad_aseo);
+              id(sensacion_pantalla) = id(sensacion_aseo);
+              break;
+            case 3:
+              id(temperatura_pantalla) = id(temperatura_dormitorio);
+              id(humedad_pantalla) = id(humedad_dormitorio);
+              id(sensacion_pantalla) = id(sensacion_dormitorio);
+              break;
+            case 4:
+              id(temperatura_pantalla) = id(temperatura_local).state;
+              id(humedad_pantalla) = id(humedad_local).state;
+              id(sensacion_pantalla) = id(sensacion_local).state;
+              break;
+            default:
+              id(temperatura_pantalla) = id(temperatura_local).state;
+              id(humedad_pantalla) = id(humedad_local).state;
+              id(sensacion_pantalla) = id(sensacion_local).state;
+              break;
+          }
+      - lvgl.label.update:
+          id: etiqueta_hora
+          text: !lambda |-
+            const auto now = id(reloj_ntp).now();
+            if (!now.is_valid()) {
+              return std::string("--:--");
+            }
+            char value[8];
+            snprintf(value, sizeof(value), "%02d:%02d", now.hour, now.minute);
+            return std::string(value);
+      - lvgl.label.update:
+          id: etiqueta_fecha
+          text: !lambda |-
+            const auto now = id(reloj_ntp).now();
+            if (!now.is_valid()) {
+              return std::string("Esperando hora NTP");
+            }
+            static const char *dias[] = {"Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"};
+            static const char *meses[] = {"Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"};
+            char value[40];
+            snprintf(value, sizeof(value), "%s %d %s %d", dias[now.day_of_week - 1], now.day_of_month, meses[now.month - 1], now.year);
+            return std::string(value);
+      - lvgl.label.update:
+          id: etiqueta_ubicacion
+          text: !lambda |-
+            static const char *nombres[] = {"SALÓN", "ASEO", "DORMITORIO", "DESPACHO"};
+            const int idx = id(ubicacion_seleccionada) - 1;
+            return std::string(nombres[idx >= 0 && idx < 4 ? idx : 3]);
+      - lvgl.label.update:
+          id: etiqueta_temperatura
+          text: !lambda |-
+            char value[20];
+            const float t = id(temperatura_pantalla);
+            if (isnan(t)) {
+              snprintf(value, sizeof(value), "--.- C");
+            } else {
+              snprintf(value, sizeof(value), "%.1f C", t);
+            }
+            return std::string(value);
+      - lvgl.label.update:
+          id: etiqueta_humedad
+          text: !lambda |-
+            char value[16];
+            const float h = id(humedad_pantalla);
+            if (isnan(h)) {
+              snprintf(value, sizeof(value), "--.-%%");
+            } else {
+              snprintf(value, sizeof(value), "%.1f%%", h);
+            }
+            return std::string(value);
+      - lvgl.label.update:
+          id: etiqueta_sensacion
+          text: !lambda |-
+            char value[20];
+            const float s = id(sensacion_pantalla);
+            if (isnan(s)) {
+              snprintf(value, sizeof(value), "--.- C");
+            } else {
+              snprintf(value, sizeof(value), "%.1f C", s);
+            }
+            return std::string(value);
+
+  - interval: 2s
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return !isnan(id(temperatura_local).state) && !isnan(id(humedad_local).state);
+          then:
+            - mqtt.publish:
+                topic: casa/despacho/variables
+                payload: !lambda |-
+                  char json[128];
+                  const float temp = id(temperatura_local).state;
+                  const float humidity = id(humedad_local).state;
+                  const float heat_index = id(sensacion_local).state;
+                  const float rssi = id(wifi_rssi).state;
+                  snprintf(json, sizeof(json),
+                    "{\"temperatura\":%.2f,\"humedad\":%.1f,\"sen_termica\":%.2f,\"WiFi_Signal\":%.0f}",
+                    temp, humidity, heat_index, isnan(rssi) ? -100.0f : rssi);
+                  return std::string(json);
+                qos: 2
+                retain: true
+
+lvgl:
+  displays:
+    - tft_display
+  rotation: 90
+  touchscreens:
+    - touchscreen_id: touch_panel
+  default_font: FSSB12
+  buffer_size: 10%
+  pages:
+    - id: pagina_inicio
+      bg_color: 0x000000
+      scrollable: false
+      widgets:
+        - obj:
+            x: 1
+            y: 1
+            width: 478
+            height: 318
+            bg_opa: TRANSP
+            border_color: 0xFF0000
+            border_width: 5
+            radius: 10
+            pad_all: 0
+            scrollable: false
+            clickable: false
+        - label:
+            id: etiqueta_hora
+            x: 0
+            y: 8
+            width: 480
+            align: TOP_MID
+            text: "--:--"
+            text_font: FSSB24
+            text_align: CENTER
+            text_color: 0xFFFFFF
+            hidden: !lambda |-
+              return id(ubicacion_seleccionada) != 4;
+        - label:
+            id: etiqueta_fecha
+            x: 0
+            y: 62
+            width: 480
+            align: TOP_MID
+            text: "Esperando hora NTP"
+            text_font: FSSB24
+            text_align: CENTER
+            text_color: 0xFFFFFF
+        - label:
+            id: etiqueta_ubicacion
+            x: 0
+            y: 8
+            width: 480
+            align: TOP_MID
+            text: "Despacho"
+            text_font: FSSB24
+            text_align: CENTER
+            text_color: 0xFFFFFF
+            hidden: !lambda |-
+              return id(ubicacion_seleccionada) == 4;
+        - line:
+            points:
+              - 50, 121
+              - 430, 121
+            line_color: 0xFF0000
+            line_width: 5
+        - image:
+            src: icono_temperatura
+            x: 8
+            y: 140
+        - label:
+            id: etiqueta_temperatura
+            x: 42
+            y: 134
+            width: 116
+            text: "--.- C"
+            text_font: FSSB30
+            text_align: CENTER
+            text_color: 0xFFFF00
+            long_mode: CLIP
+        - image:
+            src: icono_humedad
+            x: 166
+            y: 140
+        - label:
+            id: etiqueta_humedad
+            x: 198
+            y: 134
+            width: 110
+            text: "--.-%"
+            text_font: FSSB30
+            text_align: CENTER
+            text_color: 0xFFFF00
+            long_mode: CLIP
+        - image:
+            src: icono_sensacion
+            x: 312
+            y: 140
+        - label:
+            id: etiqueta_sensacion
+            x: 346
+            y: 134
+            width: 124
+            text: "--.- C"
+            text_font: FSSB30
+            text_align: CENTER
+            text_color: 0xFFFF00
+            long_mode: CLIP
+        - line:
+            points:
+              - 50, 190
+              - 430, 190
+            line_color: 0xFF0000
+            line_width: 5
+        - button:
+            x: 10
+            y: 202
+            width: 108
+            height: 40
+            bg_color: 0x303030
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "Salón"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - lambda: id(ubicacion_seleccionada) = 1;
+              - lvgl.widget.refresh: etiqueta_hora
+              - lvgl.widget.refresh: etiqueta_ubicacion
+        - button:
+            x: 126
+            y: 202
+            width: 108
+            height: 40
+            bg_color: 0x303030
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "Aseo"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - lambda: id(ubicacion_seleccionada) = 2;
+              - lvgl.widget.refresh: etiqueta_hora
+              - lvgl.widget.refresh: etiqueta_ubicacion
+        - button:
+            x: 242
+            y: 202
+            width: 108
+            height: 40
+            bg_color: 0x303030
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "Dormitorio"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - lambda: id(ubicacion_seleccionada) = 3;
+              - lvgl.widget.refresh: etiqueta_hora
+              - lvgl.widget.refresh: etiqueta_ubicacion
+        - button:
+            x: 358
+            y: 202
+            width: 108
+            height: 40
+            bg_color: 0x303030
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "Despacho"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - lambda: id(ubicacion_seleccionada) = 4;
+              - lvgl.widget.refresh: etiqueta_hora
+              - lvgl.widget.refresh: etiqueta_ubicacion
+        - button:
+            x: 18
+            y: 260
+            width: 120
+            height: 44
+            bg_color: 0x174A8B
+            pad_all: 0
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "Ventilador\nDormitorio"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - lambda: id(ventilador_seleccionado) = 1;
+              - lvgl.page.show: pagina_ventilador
+        - button:
+            x: 342
+            y: 260
+            width: 120
+            height: 44
+            bg_color: 0x174A8B
+            pad_all: 0
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "Ventilador\nSalón"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - lambda: id(ventilador_seleccionado) = 2;
+              - lvgl.page.show: pagina_ventilador
+        - image:
+            src: logo_reloj
+            x: 163
+            y: 259
+
+    - id: pagina_ventilador
+      bg_color: 0x000000
+      scrollable: false
+      widgets:
+        - obj:
+            x: 1
+            y: 1
+            width: 478
+            height: 318
+            bg_opa: TRANSP
+            border_color: 0xFF0000
+            border_width: 5
+            radius: 10
+            pad_all: 0
+            scrollable: false
+            clickable: false
+        - button:
+            x: 190
+            y: 20
+            width: 100
+            height: 50
+            bg_color: 0x205020
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "Atras"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - mqtt.publish:
+                  topic: casa/dormitorio/ventilador
+                  payload: '{"opcion":0}'
+                  qos: 2
+                  retain: true
+              - mqtt.publish:
+                  topic: casa/salon/ventilador
+                  payload: '{"opcion":0}'
+                  qos: 2
+                  retain: true
+              - lvgl.page.show: pagina_inicio
+        - button:
+            x: 30
+            y: 20
+            width: 100
+            height: 50
+            bg_color: 0x183E9E
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "Luz"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 0
+        - button:
+            x: 350
+            y: 20
+            width: 100
+            height: 50
+            bg_color: 0x183E9E
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "Vent"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 1
+        - button:
+            x: 125
+            y: 90
+            width: 50
+            height: 50
+            bg_color: 0xFFFF00
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 2
+        - button:
+            x: 215
+            y: 90
+            width: 50
+            height: 50
+            bg_color: 0xFFFFFF
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 3
+        - button:
+            x: 305
+            y: 90
+            width: 50
+            height: 50
+            bg_color: 0x0000FF
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 4
+
+        - button:
+            x: 25
+            y: 90
+            width: 50
+            height: 50
+            bg_color: 0x7040A0
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "-"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 5
+        - button:
+            x: 405
+            y: 90
+            width: 50
+            height: 50
+            bg_color: 0x7040A0
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "+"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 6
+        - button:
+            x: 35
+            y: 160
+            width: 50
+            height: 50
+            bg_color: 0x183060
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "1"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 7
+        - button:
+            x: 125
+            y: 160
+            width: 50
+            height: 50
+            bg_color: 0x183060
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "2"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 8
+        - button:
+            x: 215
+            y: 160
+            width: 50
+            height: 50
+            bg_color: 0x183060
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "3"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 9
+        - button:
+            x: 305
+            y: 160
+            width: 50
+            height: 50
+            bg_color: 0x183060
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "4"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 10
+        - button:
+            x: 395
+            y: 160
+            width: 50
+            height: 50
+            bg_color: 0x183060
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "5"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 11
+
+        - button:
+            x: 58
+            y: 230
+            width: 100
+            height: 50
+            bg_color: 0x183060
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "F/R"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 12
+        - button:
+            x: 215
+            y: 230
+            width: 50
+            height: 50
+            bg_color: 0x505050
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "2H"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 13
+        - button:
+            x: 305
+            y: 230
+            width: 50
+            height: 50
+            bg_color: 0x505050
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "4H"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 14
+        - button:
+            x: 395
+            y: 230
+            width: 50
+            height: 50
+            bg_color: 0x505050
+            layout:
+              type: flex
+              flex_flow: column
+              flex_align_main: center
+              flex_align_cross: center
+            widgets:
+              - label:
+                  text: "8H"
+                  width: 100%
+                  text_align: CENTER
+                  text_font: FSSB12
+            on_press:
+              - script.execute:
+                  id: enviar_comando_ventilador
+                  ventilador: !lambda return id(ventilador_seleccionado);
+                  comando: 15
