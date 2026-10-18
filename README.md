@@ -94,7 +94,7 @@ Los tres relojes táctiles comparten diseño, hardware y lógica de control, con
 
 ### Puente RF CC1101
 
-La configuración [cc1101_mqtt_esphome.yaml](./cc1101_mqtt_esphome.yaml) corresponde a un ESP32 independiente del inventario de relojes. Actúa como pasarela entre MQTT y los mandos RF de los ventiladores: escucha los comandos de `casa/+/ventilador`, los transmite por RF y publica los códigos recibidos. Usa el nombre ESPHome `cc1101-mqtt-central`, IP estática `192.168.1.18` y no tiene pantalla ni sensor ambiental.
+La configuración [cc1101_mqtt_central.yaml](./cc1101_mqtt_central.yaml) corresponde a un ESP32 independiente del inventario de relojes. Actúa como pasarela entre MQTT y los mandos RF de los ventiladores: escucha los comandos de `casa/+/ventilador`, los transmite por RF y publica los códigos recibidos. También expone los ventiladores y botones de control mediante la API nativa de ESPHome; para verlos en Home Assistant, añade el dispositivo con la integración ESPHome. Usa el nombre ESPHome `cc1101-mqtt-central`, IP estática `192.168.1.18` y no tiene pantalla ni sensor ambiental.
 
 ### Capturador de mandos RF
 

@@ -94,7 +94,7 @@ The three touchscreen clocks share the same design, hardware, and control logic,
 
 ### CC1101 RF bridge
 
-The [cc1101_mqtt_esphome.yaml](./cc1101_mqtt_esphome.yaml) configuration belongs to a separate ESP32 device, not one of the clocks. It bridges MQTT and the fans' RF remotes: it listens on `casa/+/ventilador`, transmits commands over RF, and publishes received codes. It uses the ESPHome name `cc1101-mqtt-central`, static IP address `192.168.1.18`, and has no display or environmental sensor.
+The [cc1101_mqtt_central.yaml](./cc1101_mqtt_central.yaml) configuration belongs to a separate ESP32 device, not one of the clocks. It bridges MQTT and the fans' RF remotes: it listens on `casa/+/ventilador`, transmits commands over RF, and publishes received codes. It also exposes fan controls and buttons through the native ESPHome API; to see them in Home Assistant, add the device using the ESPHome integration. It uses the ESPHome name `cc1101-mqtt-central`, static IP address `192.168.1.18`, and has no display or environmental sensor.
 
 ### RF remote capture tool
 
