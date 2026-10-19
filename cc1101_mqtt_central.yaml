@@ -77,12 +77,23 @@ remote_transmitter:
 globals:
   - id: rc_code
     type: std::string
+    restore_value: no
     initial_value: '""'
   - id: rc_code_valid
     type: bool
+    restore_value: no
     initial_value: "false"
   - id: rc_numeric_code
     type: uint32_t
+    restore_value: no
+    initial_value: "0"
+  - id: luz_level_dormitorio
+    type: int
+    restore_value: no
+    initial_value: "0"
+  - id: luz_level_salon
+    type: int
+    restore_value: no
     initial_value: "0"
 
 mqtt:
@@ -90,21 +101,15 @@ mqtt:
   port: 1883
   username: ${mqtt_username}
   password: ${mqtt_password}
-  on_connect:
-    then:
-      - logger.log: "Conectado al broker MQTT; listo para recibir comandos RF"
-  on_disconnect:
-    then:
-      - logger.log: "Se perdió la conexión con el broker MQTT"
   on_message:
-    - topic: "casa/+/ventilador"
+    - topic: "casa/+/ventilador"        # ← sin /#
       then:
         - logger.log:
-            format: "Mensaje MQTT recibido en tópico de ventilador: %s"
+            format: "Mensaje MQTT recibido para ventilador: %s"
             args:
               - x.c_str()
   on_json_message:
-    - topic: "casa/+/ventilador"
+    - topic: "casa/+/ventilador"        # ← sin /#
       then:
         - lambda: |-
             id(rc_code_valid) = false;
@@ -112,7 +117,6 @@ mqtt:
               ESP_LOGW("rf_fan", "Mensaje ignorado: falta 'opcion' uint32");
               return;
             }
-
             const uint32_t value = x["opcion"].as<uint32_t>();
             if (value == 0) {
               ESP_LOGW("rf_fan", "Comando MQTT cero ignorado; no es un código RF válido");
@@ -126,8 +130,7 @@ mqtt:
             then:
               - script.execute:
                   id: transmit_rf_command
-                  code: !lambda return id(rc_numeric_code);
-
+                  code: !lambda return id(rc_numeric_code);   
 script:
   - id: transmit_rf_command
     mode: queued
@@ -166,7 +169,226 @@ script:
       - script.execute:
           id: transmit_rf_command
           code: !lambda return code;
-switch:
-  - platform: restart
-    name: esp-cam restart
 
+fan:
+  - platform: template
+    name: "Ventilador Dormitorio"
+    speed_count: 5
+    on_turn_on:
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 1
+          code: 3972038414
+    on_turn_off:
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 1
+          code: 3972038414
+    on_speed_set:
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 1
+          code: !lambda |-
+            static const uint32_t codes[] = {
+              4223696654UL, 4274028302UL, 1522564878UL, 4022370062UL, 3217063694UL
+            };
+            return codes[x - 1];
+
+  - platform: template
+    name: "Ventilador Salón"
+    speed_count: 5
+    on_turn_on:
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 2
+          code: 3972014289
+    on_turn_off:
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 2
+          code: 3972014289
+    on_speed_set:
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 2
+          code: !lambda |-
+            static const uint32_t codes[] = {
+              4223672529UL, 4274004177UL, 1522540753UL, 4022345937UL, 3217039569UL
+            };
+            return codes[x - 1];
+
+select:
+  - platform: template
+    name: "Ventilador Dormitorio - Color Luz"
+    id: color_luz_dormitorio
+    options:
+      - "Amarilla"
+      - "Blanca"
+      - "Azul"
+    optimistic: true
+    on_value:
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 1
+          code: !lambda |-
+            static const uint32_t codes[] = {
+              1623228174UL, 113278734UL, 230719246UL
+            };
+            const char* val = x.c_str();
+            if (strcmp(val, "Blanca") == 0) return codes[1];
+            if (strcmp(val, "Azul") == 0) return codes[2];
+            return codes[0];
+
+  - platform: template
+    name: "Ventilador Salón - Color Luz"
+    id: color_luz_salon
+    options:
+      - "Amarilla"
+      - "Blanca"
+      - "Azul"
+    optimistic: true
+    on_value:
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 2
+          code: !lambda |-
+            static const uint32_t codes[] = {
+              1623204049UL, 113254609UL, 230695121UL
+            };
+            const char* val = x.c_str();
+            if (strcmp(val, "Blanca") == 0) return codes[1];
+            if (strcmp(val, "Azul") == 0) return codes[2];
+            return codes[0];
+
+  - platform: template
+    name: "Ventilador Dormitorio - Timer"
+    id: timer_dormitorio
+    options:
+      - "2h"
+      - "4h"
+      - "8h"
+    optimistic: true
+    on_value:
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 1
+          code: !lambda |-
+            static const uint32_t codes[] = {
+              4156587790UL, 2143321870UL, 3753934606UL
+            };
+            const char* val = x.c_str();
+            if (strcmp(val, "4h") == 0) return codes[1];
+            if (strcmp(val, "8h") == 0) return codes[2];
+            return codes[0];
+
+  - platform: template
+    name: "Ventilador Salón - Timer"
+    id: timer_salon
+    options:
+      - "2h"
+      - "4h"
+      - "8h"
+    optimistic: true
+    on_value:
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 2
+          code: !lambda |-
+            static const uint32_t codes[] = {
+              4156563665UL, 2143297745UL, 3753910481UL
+            };
+            const char* val = x.c_str();
+            if (strcmp(val, "4h") == 0) return codes[1];
+            if (strcmp(val, "8h") == 0) return codes[2];
+            return codes[0];
+
+button:
+  # --- DORMITORIO ---
+  - platform: template
+    name: "Ventilador Dormitorio - Luz General"
+    on_press:
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 1
+          code: 2780856078
+
+  - platform: template
+    name: "Ventilador Dormitorio - Luz Subir"
+    on_press:
+      - lambda: |-
+          if (id(luz_level_dormitorio) < 3) id(luz_level_dormitorio)++;
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 1
+          code: !lambda |-
+            static const uint32_t codes[] = {
+              2780856078UL, 1623228174UL, 113278734UL, 230719246UL
+            };
+            return codes[id(luz_level_dormitorio)];
+
+  - platform: template
+    name: "Ventilador Dormitorio - Luz Bajar"
+    on_press:
+      - lambda: |-
+          if (id(luz_level_dormitorio) > 0) id(luz_level_dormitorio)--;
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 1
+          code: !lambda |-
+            static const uint32_t codes[] = {
+              2780856078UL, 1623228174UL, 113278734UL, 230719246UL
+            };
+            return codes[id(luz_level_dormitorio)];
+
+  - platform: template
+    name: "Ventilador Dormitorio - Invertir giro"
+    on_press:
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 1
+          code: 4257251086
+
+  # --- SALÓN ---
+  - platform: template
+    name: "Ventilador Salón - Luz General"
+    on_press:
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 2
+          code: 2780831953
+
+  - platform: template
+    name: "Ventilador Salón - Luz Subir"
+    on_press:
+      - lambda: |-
+          if (id(luz_level_salon) < 3) id(luz_level_salon)++;
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 2
+          code: !lambda |-
+            static const uint32_t codes[] = {
+              2780831953UL, 1623204049UL, 113254609UL, 230695121UL
+            };
+            return codes[id(luz_level_salon)];
+
+  - platform: template
+    name: "Ventilador Salón - Luz Bajar"
+    on_press:
+      - lambda: |-
+          if (id(luz_level_salon) > 0) id(luz_level_salon)--;
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 2
+          code: !lambda |-
+            static const uint32_t codes[] = {
+              2780831953UL, 1623204049UL, 113254609UL, 230695121UL
+            };
+            return codes[id(luz_level_salon)];
+
+  - platform: template
+    name: "Ventilador Salón - Invertir giro"
+    on_press:
+      - script.execute:
+          id: transmit_fan_rf_command
+          room: 2
+          code: 4257226961   
