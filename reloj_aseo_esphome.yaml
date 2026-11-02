@@ -18,6 +18,7 @@ esp32:
   framework:
     type: esp-idf
     advanced:
+      flash_chip: generic
       sram1_as_iram: true
 
 logger:
