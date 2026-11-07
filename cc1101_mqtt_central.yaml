@@ -8,17 +8,20 @@ substitutions:
   mqtt_password: !secret mqtt_password
   broker: !secret broker
 
+# Codigos RF editables por el usuario.
+packages:
+  codigos_rf: !include assets/codigos_ventiladores.yaml
+
 esphome:
   name: ${device_name}
   friendly_name: ${friendly_name}
-  min_version: 2026.9.1
 
 esp32:
   board: esp32dev
   framework:
     type: esp-idf
     advanced:
-      minimum_chip_revision: "3.1"
+      minimum_chip_revision: "3.1" # Tras la primera instalación, consulta los registros en ESPHome Device Builder: muestran la revisión del ESP32 que debes usar aquí. Para una placa desconocida, omite esta opción al compilar por primera vez.
       flash_chip: generic
       sram1_as_iram: true
 
@@ -81,58 +84,29 @@ globals:
     type: std::string
     restore_value: no
     initial_value: '""'
-  - id: rc_code_valid
-    type: bool
-    restore_value: no
-    initial_value: "false"
-  - id: rc_numeric_code
-    type: uint32_t
-    restore_value: no
-    initial_value: "0"
-  - id: luz_level_dormitorio
-    type: int
-    restore_value: no
-    initial_value: "0"
-  - id: luz_level_salon
-    type: int
-    restore_value: no
-    initial_value: "0"
 
 mqtt:
   broker: ${broker}
   port: 1883
   username: ${mqtt_username}
   password: ${mqtt_password}
-  on_message:
-    - topic: "casa/+/ventilador"        # ← sin /#
-      then:
-        - logger.log:
-            format: "Mensaje MQTT recibido para ventilador: %s"
-            args:
-              - x.c_str()
   on_json_message:
-    - topic: "casa/+/ventilador"        # ← sin /#
+    - topic: "casa/dormitorio/ventilador/set"
       then:
         - lambda: |-
-            id(rc_code_valid) = false;
-            if (!x["opcion"].is<uint32_t>()) {
-              ESP_LOGW("rf_fan", "Mensaje ignorado: falta 'opcion' uint32");
+            if (!x["accion"].is<const char *>()) {
+              ESP_LOGW("rf_fan", "Mensaje ignorado: falta accion de texto");
               return;
             }
-            const uint32_t value = x["opcion"].as<uint32_t>();
-            if (value == 0) {
-              ESP_LOGW("rf_fan", "Comando MQTT cero ignorado; no es un código RF válido");
+            id(transmit_fan_rf_command).execute(1, std::string(x["accion"].as<const char *>()));
+    - topic: "casa/salon/ventilador/set"
+      then:
+        - lambda: |-
+            if (!x["accion"].is<const char *>()) {
+              ESP_LOGW("rf_fan", "Mensaje ignorado: falta accion de texto");
               return;
             }
-            id(rc_numeric_code) = value;
-            id(rc_code_valid) = true;
-        - if:
-            condition:
-              lambda: "return id(rc_code_valid);"
-            then:
-              - script.execute:
-                  id: transmit_rf_command
-                  code: !lambda return id(rc_numeric_code);   
+            id(transmit_fan_rf_command).execute(2, std::string(x["accion"].as<const char *>()));
 script:
   - id: transmit_rf_command
     mode: queued
@@ -163,14 +137,40 @@ script:
     mode: queued
     parameters:
       room: int
-      code: uint32_t
+      accion: string
     then:
       - lambda: |-
-          ESP_LOGI("rf_fan", "Comando local para habitación %d: %lu", room,
-                   static_cast<unsigned long>(code));
-      - script.execute:
-          id: transmit_rf_command
-          code: !lambda return code;
+          // Los valores RF se editan en assets/codigos_ventiladores.yaml.
+          struct ComandoRF { const char *accion; uint32_t dormitorio; uint32_t salon; };
+          static const ComandoRF comandos[] = {
+            {"luz", ${rf_dormitorio_luz}UL, ${rf_salon_luz}UL},
+            {"ventilador", ${rf_dormitorio_ventilador}UL, ${rf_salon_ventilador}UL},
+            {"luz_amarilla", ${rf_dormitorio_luz_amarilla}UL, ${rf_salon_luz_amarilla}UL},
+            {"luz_blanca", ${rf_dormitorio_luz_blanca}UL, ${rf_salon_luz_blanca}UL},
+            {"luz_azul", ${rf_dormitorio_luz_azul}UL, ${rf_salon_luz_azul}UL},
+            {"bajar_luz", ${rf_dormitorio_bajar_luz}UL, ${rf_salon_bajar_luz}UL},
+            {"subir_luz", ${rf_dormitorio_subir_luz}UL, ${rf_salon_subir_luz}UL},
+            {"velocidad_1", ${rf_dormitorio_velocidad_1}UL, ${rf_salon_velocidad_1}UL},
+            {"velocidad_2", ${rf_dormitorio_velocidad_2}UL, ${rf_salon_velocidad_2}UL},
+            {"velocidad_3", ${rf_dormitorio_velocidad_3}UL, ${rf_salon_velocidad_3}UL},
+            {"velocidad_4", ${rf_dormitorio_velocidad_4}UL, ${rf_salon_velocidad_4}UL},
+            {"velocidad_5", ${rf_dormitorio_velocidad_5}UL, ${rf_salon_velocidad_5}UL},
+            {"invertir_giro", ${rf_dormitorio_invertir_giro}UL, ${rf_salon_invertir_giro}UL},
+            {"temporizador_2h", ${rf_dormitorio_temporizador_2h}UL, ${rf_salon_temporizador_2h}UL},
+            {"temporizador_4h", ${rf_dormitorio_temporizador_4h}UL, ${rf_salon_temporizador_4h}UL},
+            {"temporizador_8h", ${rf_dormitorio_temporizador_8h}UL, ${rf_salon_temporizador_8h}UL},
+          };
+          if (room != 1 && room != 2) {
+            ESP_LOGW("rf_fan", "Habitacion no valida: %d", room);
+            return;
+          }
+          for (const auto &comando : comandos) {
+            if (accion == comando.accion) {
+              id(transmit_rf_command).execute(room == 1 ? comando.dormitorio : comando.salon);
+              return;
+            }
+          }
+          ESP_LOGW("rf_fan", "Accion desconocida: %s", accion.c_str());
 
 fan:
   - platform: template
@@ -180,21 +180,19 @@ fan:
       - script.execute:
           id: transmit_fan_rf_command
           room: 1
-          code: 3972038414
+          accion: "ventilador"
     on_turn_off:
       - script.execute:
           id: transmit_fan_rf_command
           room: 1
-          code: 3972038414
+          accion: "ventilador"
     on_speed_set:
       - script.execute:
           id: transmit_fan_rf_command
           room: 1
-          code: !lambda |-
-            static const uint32_t codes[] = {
-              4223696654UL, 4274028302UL, 1522564878UL, 4022370062UL, 3217063694UL
-            };
-            return codes[x - 1];
+          accion: !lambda |-
+            if (x < 1 || x > 5) return std::string("invalida");
+            return std::string("velocidad_") + std::to_string(x);
 
   - platform: template
     name: "Ventilador Salón"
@@ -203,21 +201,19 @@ fan:
       - script.execute:
           id: transmit_fan_rf_command
           room: 2
-          code: 3972014289
+          accion: "ventilador"
     on_turn_off:
       - script.execute:
           id: transmit_fan_rf_command
           room: 2
-          code: 3972014289
+          accion: "ventilador"
     on_speed_set:
       - script.execute:
           id: transmit_fan_rf_command
           room: 2
-          code: !lambda |-
-            static const uint32_t codes[] = {
-              4223672529UL, 4274004177UL, 1522540753UL, 4022345937UL, 3217039569UL
-            };
-            return codes[x - 1];
+          accion: !lambda |-
+            if (x < 1 || x > 5) return std::string("invalida");
+            return std::string("velocidad_") + std::to_string(x);
 
 select:
   - platform: template
@@ -232,14 +228,10 @@ select:
       - script.execute:
           id: transmit_fan_rf_command
           room: 1
-          code: !lambda |-
-            static const uint32_t codes[] = {
-              1623228174UL, 113278734UL, 230719246UL
-            };
-            const char* val = x.c_str();
-            if (strcmp(val, "Blanca") == 0) return codes[1];
-            if (strcmp(val, "Azul") == 0) return codes[2];
-            return codes[0];
+          accion: !lambda |-
+            if (x == "Blanca") return std::string("luz_blanca");
+            if (x == "Azul") return std::string("luz_azul");
+            return std::string("luz_amarilla");
 
   - platform: template
     name: "Ventilador Salón - Color Luz"
@@ -253,14 +245,10 @@ select:
       - script.execute:
           id: transmit_fan_rf_command
           room: 2
-          code: !lambda |-
-            static const uint32_t codes[] = {
-              1623204049UL, 113254609UL, 230695121UL
-            };
-            const char* val = x.c_str();
-            if (strcmp(val, "Blanca") == 0) return codes[1];
-            if (strcmp(val, "Azul") == 0) return codes[2];
-            return codes[0];
+          accion: !lambda |-
+            if (x == "Blanca") return std::string("luz_blanca");
+            if (x == "Azul") return std::string("luz_azul");
+            return std::string("luz_amarilla");
 
   - platform: template
     name: "Ventilador Dormitorio - Timer"
@@ -274,14 +262,10 @@ select:
       - script.execute:
           id: transmit_fan_rf_command
           room: 1
-          code: !lambda |-
-            static const uint32_t codes[] = {
-              4156587790UL, 2143321870UL, 3753934606UL
-            };
-            const char* val = x.c_str();
-            if (strcmp(val, "4h") == 0) return codes[1];
-            if (strcmp(val, "8h") == 0) return codes[2];
-            return codes[0];
+          accion: !lambda |-
+            if (x == "4h") return std::string("temporizador_4h");
+            if (x == "8h") return std::string("temporizador_8h");
+            return std::string("temporizador_2h");
 
   - platform: template
     name: "Ventilador Salón - Timer"
@@ -295,14 +279,10 @@ select:
       - script.execute:
           id: transmit_fan_rf_command
           room: 2
-          code: !lambda |-
-            static const uint32_t codes[] = {
-              4156563665UL, 2143297745UL, 3753910481UL
-            };
-            const char* val = x.c_str();
-            if (strcmp(val, "4h") == 0) return codes[1];
-            if (strcmp(val, "8h") == 0) return codes[2];
-            return codes[0];
+          accion: !lambda |-
+            if (x == "4h") return std::string("temporizador_4h");
+            if (x == "8h") return std::string("temporizador_8h");
+            return std::string("temporizador_2h");
 
 button:
   # --- DORMITORIO ---
@@ -312,44 +292,28 @@ button:
       - script.execute:
           id: transmit_fan_rf_command
           room: 1
-          code: 2780856078
-
+          accion: "luz"
   - platform: template
     name: "Ventilador Dormitorio - Luz Subir"
     on_press:
-      - lambda: |-
-          if (id(luz_level_dormitorio) < 3) id(luz_level_dormitorio)++;
       - script.execute:
           id: transmit_fan_rf_command
           room: 1
-          code: !lambda |-
-            static const uint32_t codes[] = {
-              2780856078UL, 1623228174UL, 113278734UL, 230719246UL
-            };
-            return codes[id(luz_level_dormitorio)];
-
+          accion: "subir_luz"
   - platform: template
     name: "Ventilador Dormitorio - Luz Bajar"
     on_press:
-      - lambda: |-
-          if (id(luz_level_dormitorio) > 0) id(luz_level_dormitorio)--;
       - script.execute:
           id: transmit_fan_rf_command
           room: 1
-          code: !lambda |-
-            static const uint32_t codes[] = {
-              2780856078UL, 1623228174UL, 113278734UL, 230719246UL
-            };
-            return codes[id(luz_level_dormitorio)];
-
+          accion: "bajar_luz"
   - platform: template
     name: "Ventilador Dormitorio - Invertir giro"
     on_press:
       - script.execute:
           id: transmit_fan_rf_command
           room: 1
-          code: 4257251086
-
+          accion: "invertir_giro"
   # --- SALÓN ---
   - platform: template
     name: "Ventilador Salón - Luz General"
@@ -357,40 +321,25 @@ button:
       - script.execute:
           id: transmit_fan_rf_command
           room: 2
-          code: 2780831953
-
+          accion: "luz"
   - platform: template
     name: "Ventilador Salón - Luz Subir"
     on_press:
-      - lambda: |-
-          if (id(luz_level_salon) < 3) id(luz_level_salon)++;
       - script.execute:
           id: transmit_fan_rf_command
           room: 2
-          code: !lambda |-
-            static const uint32_t codes[] = {
-              2780831953UL, 1623204049UL, 113254609UL, 230695121UL
-            };
-            return codes[id(luz_level_salon)];
-
+          accion: "subir_luz"
   - platform: template
     name: "Ventilador Salón - Luz Bajar"
     on_press:
-      - lambda: |-
-          if (id(luz_level_salon) > 0) id(luz_level_salon)--;
       - script.execute:
           id: transmit_fan_rf_command
           room: 2
-          code: !lambda |-
-            static const uint32_t codes[] = {
-              2780831953UL, 1623204049UL, 113254609UL, 230695121UL
-            };
-            return codes[id(luz_level_salon)];
-
+          accion: "bajar_luz"
   - platform: template
     name: "Ventilador Salón - Invertir giro"
     on_press:
       - script.execute:
           id: transmit_fan_rf_command
           room: 2
-          code: 4257226961   
+          accion: "invertir_giro"

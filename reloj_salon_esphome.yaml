@@ -11,16 +11,15 @@ substitutions:
 esphome:
   name: ${device_name}
   friendly_name: ${friendly_name}
-  min_version: 2026.9.1
 
 esp32:
   board: esp32dev
   framework:
     type: esp-idf
     advanced:
-      minimum_chip_revision: "3.0"
-      sram1_as_iram: true
+      minimum_chip_revision: "3.0" # Tras la primera instalación, consulta los registros en ESPHome Device Builder: muestran la revisión del ESP32 que debes usar aquí. Para una placa desconocida, omite esta opción al compilar por primera vez.
       flash_chip: generic
+      sram1_as_iram: true
 
 logger:
 
@@ -127,6 +126,11 @@ touchscreen:
       mirror_y: true
     update_interval: 50ms
     threshold: 400
+    # Un nuevo contacto cancela el rearme: los rebotes no liberan el bloqueo.
+    on_touch:
+      - script.stop: rearmar_comando_tactil
+    on_release:
+      - script.execute: rearmar_comando_tactil
     calibration:
       x_min: 295
       x_max: 3855
@@ -159,21 +163,25 @@ font:
   - file: "gfonts://Roboto@bold"
     id: FSSB24
     size: 44
-    glyphs: " !%()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ"
+    glyphs: " °!%()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ"
   - file: "gfonts://Roboto@bold"
     id: FSSB18
     size: 28
-    glyphs: " !%()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ"
+    glyphs: " °!%()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ"
   - file: "gfonts://Roboto@bold"
     id: FSSB30
     size: 36
-    glyphs: " !%()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ"
+    glyphs: " °!%()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ"
   - file: "gfonts://Roboto@bold"
     id: FSSB12
     size: 16
-    glyphs: " !%()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ"
+    glyphs: " °!%()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ"
 
 globals:
+  - id: comando_tactil_bloqueado
+    type: bool
+    restore_value: false
+    initial_value: "false"
   - id: ubicacion_seleccionada
     type: int
     initial_value: "1"
@@ -280,41 +288,61 @@ sensor:
     update_interval: 60s
 
 script:
+  - id: rearmar_comando_tactil
+    mode: restart
+    then:
+      - delay: 200ms
+      - lambda: id(comando_tactil_bloqueado) = false;
   - id: enviar_comando_ventilador
     mode: queued
     parameters:
       ventilador: int
       comando: int
     then:
-      - mqtt.publish:
-          topic: !lambda |-
-            return ventilador == 1
-              ? std::string("casa/dormitorio/ventilador")
-              : std::string("casa/salon/ventilador");
-          payload: !lambda |-
-            static const uint32_t codigos_dormitorio[] = {
-              2780856078UL, 3972038414UL, 1623228174UL, 113278734UL,
-              230719246UL, 4123033358UL, 1606450958UL, 4223696654UL,
-              4274028302UL, 1522564878UL, 4022370062UL, 3217063694UL,
-              4257251086UL, 4156587790UL, 2143321870UL, 3753934606UL
-            };
-            static const uint32_t codigos_salon[] = {
-              2780831953UL, 3972014289UL, 1623204049UL, 113254609UL,
-              230695121UL, 4123009233UL, 1606426833UL, 4223672529UL,
-              4274004177UL, 1522540753UL, 4022345937UL, 3217039569UL,
-              4257226961UL, 4156563665UL, 2143297745UL, 3753910481UL
-            };
-            if (comando < 0 || comando >= 16) {
-              return std::string("{\"opcion\":0}");
-            }
-            const uint32_t codigo = ventilador == 1
-              ? codigos_dormitorio[comando]
-              : codigos_salon[comando];
-            char json[32];
-            snprintf(json, sizeof(json), "{\"opcion\":%lu}", static_cast<unsigned long>(codigo));
-            return std::string(json);
-          qos: 2
-          retain: true
+      - if:
+          condition:
+            lambda: |-
+              return !id(comando_tactil_bloqueado) &&
+                     (ventilador == 1 || ventilador == 2) && comando >= 0 && comando < 16;
+          then:
+            - lambda: |-
+                id(comando_tactil_bloqueado) = true;
+                ESP_LOGI("tactil", "Orden aceptada: ventilador=%d comando=%d", ventilador, comando);
+            - mqtt.publish:
+                topic: !lambda |-
+                  return ventilador == 1
+                    ? std::string("casa/dormitorio/ventilador/set")
+                    : std::string("casa/salon/ventilador/set");
+                payload: !lambda |-
+                  static const char *acciones[] = {
+                    "luz",
+                    "ventilador",
+                    "luz_amarilla",
+                    "luz_blanca",
+                    "luz_azul",
+                    "bajar_luz",
+                    "subir_luz",
+                    "velocidad_1",
+                    "velocidad_2",
+                    "velocidad_3",
+                    "velocidad_4",
+                    "velocidad_5",
+                    "invertir_giro",
+                    "temporizador_2h",
+                    "temporizador_4h",
+                    "temporizador_8h",
+                  };
+                  if (comando < 0 || comando >= 16) {
+                    return std::string("{}");
+                  }
+                  return std::string("{\"accion\":\"") + acciones[comando] + "\"}";
+                qos: 2
+                retain: false
+          else:
+            - logger.log:
+                level: DEBUG
+                tag: tactil
+                format: "Orden ignorada: contacto repetido o comando no valido"
 
 interval:
   - interval: 1s
@@ -381,9 +409,9 @@ interval:
             char value[20];
             const float t = id(temperatura_pantalla);
             if (isnan(t)) {
-              snprintf(value, sizeof(value), "--.- C");
+              snprintf(value, sizeof(value), "--.-°");
             } else {
-              snprintf(value, sizeof(value), "%.1f C", t);
+              snprintf(value, sizeof(value), "%.1f°", t);
             }
             return std::string(value);
       - lvgl.label.update:
@@ -403,9 +431,9 @@ interval:
             char value[20];
             const float s = id(sensacion_pantalla);
             if (isnan(s)) {
-              snprintf(value, sizeof(value), "--.- C");
+              snprintf(value, sizeof(value), "--.-°");
             } else {
-              snprintf(value, sizeof(value), "%.1f C", s);
+              snprintf(value, sizeof(value), "%.1f°", s);
             }
             return std::string(value);
 
@@ -496,48 +524,87 @@ lvgl:
               - 430, 121
             line_color: 0xFF0000
             line_width: 5
-        - image:
-            src: icono_temperatura
-            x: 8
-            y: 140
-        - label:
-            id: etiqueta_temperatura
-            x: 42
-            y: 134
-            width: 116
-            text: "--.- C"
-            text_font: FSSB30
-            text_align: CENTER
-            text_color: 0xFFFF00
-            long_mode: CLIP
-        - image:
-            src: icono_humedad
-            x: 166
-            y: 140
-        - label:
-            id: etiqueta_humedad
-            x: 198
-            y: 134
-            width: 110
-            text: "--.-%"
-            text_font: FSSB30
-            text_align: CENTER
-            text_color: 0xFFFF00
-            long_mode: CLIP
-        - image:
-            src: icono_sensacion
-            x: 312
-            y: 140
-        - label:
-            id: etiqueta_sensacion
-            x: 346
-            y: 134
-            width: 124
-            text: "--.- C"
-            text_font: FSSB30
-            text_align: CENTER
-            text_color: 0xFFFF00
-            long_mode: CLIP
+        - obj:
+            x: 4
+            y: 125
+            width: 152
+            height: 61
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            scrollable: false
+            clickable: false
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: 4
+            widgets:
+              - image:
+                  src: icono_temperatura
+              - label:
+                  id: etiqueta_temperatura
+                  width: SIZE_CONTENT
+                  text: "--.-°"
+                  text_font: FSSB30
+                  text_align: CENTER
+                  text_color: 0xFFFF00
+                  long_mode: CLIP
+        - obj:
+            x: 164
+            y: 125
+            width: 152
+            height: 61
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            scrollable: false
+            clickable: false
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: 4
+            widgets:
+              - image:
+                  src: icono_humedad
+              - label:
+                  id: etiqueta_humedad
+                  width: SIZE_CONTENT
+                  text: "--.-%"
+                  text_font: FSSB30
+                  text_align: CENTER
+                  text_color: 0xFFFF00
+                  long_mode: CLIP
+        - obj:
+            x: 324
+            y: 125
+            width: 152
+            height: 61
+            bg_opa: TRANSP
+            border_width: 0
+            pad_all: 0
+            scrollable: false
+            clickable: false
+            layout:
+              type: flex
+              flex_flow: row
+              flex_align_main: center
+              flex_align_cross: center
+              pad_column: 4
+            widgets:
+              - image:
+                  src: icono_sensacion
+              - label:
+                  id: etiqueta_sensacion
+                  width: SIZE_CONTENT
+                  text: "--.-°"
+                  text_font: FSSB30
+                  text_align: CENTER
+                  text_color: 0xFFFF00
+                  long_mode: CLIP
         - line:
             points:
               - 50, 190
@@ -709,16 +776,6 @@ lvgl:
                   text_align: CENTER
                   text_font: FSSB12
             on_press:
-              - mqtt.publish:
-                  topic: casa/dormitorio/ventilador
-                  payload: '{"opcion":0}'
-                  qos: 2
-                  retain: true
-              - mqtt.publish:
-                  topic: casa/salon/ventilador
-                  payload: '{"opcion":0}'
-                  qos: 2
-                  retain: true
               - lvgl.page.show: pagina_inicio
         - button:
             x: 30

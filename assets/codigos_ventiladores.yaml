@@ -1,0 +1,45 @@
+# CODIGOS RF DE LOS VENTILADORES
+# Edita solo los numeros entre comillas; son codigos decimales de 32 bits.
+# Usa capturar_mando_esphome.yaml para obtener los codigos de tu mando.
+# Conserva los nombres de las variables y todas las acciones.
+# Despues de cambiarlos, recompila e instala SOLO cc1101_mqtt_central.yaml.
+# El protocolo y los tiempos RF se configuran en el YAML del CC1101;
+# cambiar estos numeros no adapta por si solo un protocolo diferente.
+
+substitutions:
+  # --- DORMITORIO ---
+  rf_dormitorio_luz: "2780856078"
+  rf_dormitorio_ventilador: "3972038414"
+  rf_dormitorio_luz_amarilla: "1623228174"
+  rf_dormitorio_luz_blanca: "113278734"
+  rf_dormitorio_luz_azul: "230719246"
+  rf_dormitorio_bajar_luz: "4123033358"
+  rf_dormitorio_subir_luz: "1606450958"
+  rf_dormitorio_velocidad_1: "4223696654"
+  rf_dormitorio_velocidad_2: "4274028302"
+  rf_dormitorio_velocidad_3: "1522564878"
+  rf_dormitorio_velocidad_4: "4022370062"
+  rf_dormitorio_velocidad_5: "3217063694"
+  rf_dormitorio_invertir_giro: "4257251086"
+  rf_dormitorio_temporizador_2h: "4156587790"
+  rf_dormitorio_temporizador_4h: "2143321870"
+  rf_dormitorio_temporizador_8h: "3753934606"
+
+  # --- SALON ---
+  rf_salon_luz: "2780831953"
+  rf_salon_ventilador: "3972014289"
+  rf_salon_luz_amarilla: "1623204049"
+  rf_salon_luz_blanca: "113254609"
+  rf_salon_luz_azul: "230695121"
+  rf_salon_bajar_luz: "4123009233"
+  rf_salon_subir_luz: "1606426833"
+  rf_salon_velocidad_1: "4223672529"
+  rf_salon_velocidad_2: "4274004177"
+  rf_salon_velocidad_3: "1522540753"
+  rf_salon_velocidad_4: "4022345937"
+  rf_salon_velocidad_5: "3217039569"
+  rf_salon_invertir_giro: "4257226961"
+  rf_salon_temporizador_2h: "4156563665"
+  rf_salon_temporizador_4h: "2143297745"
+  rf_salon_temporizador_8h: "3753910481"
+

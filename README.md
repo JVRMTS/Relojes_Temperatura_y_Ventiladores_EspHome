@@ -204,16 +204,19 @@ Las seis configuraciones declaran `board: esp32dev`, pero la revisión mínima d
     <tr><th>Dispositivo</th><th>Placa declarada en YAML</th><th><code>minimum_chip_revision</code></th><th>Estado</th></tr>
   </thead>
   <tbody>
-    <tr><td>Aseo</td><td><code>esp32dev</code></td><td>No especificada</td><td>No hay requisito explícito en el YAML</td></tr>
+    <tr><td>Aseo</td><td><code>esp32dev</code></td><td><code>3.0</code></td><td>Comentada; no se aplica</td></tr>
     <tr><td>Despacho</td><td><code>esp32dev</code></td><td><code>3.1</code></td><td>Activa</td></tr>
-    <tr><td>Dormitorio</td><td><code>esp32dev</code></td><td><code>3.1</code></td><td>Comentada; no se aplica</td></tr>
+    <tr><td>Dormitorio</td><td><code>esp32dev</code></td><td><code>3.0</code></td><td>Comentada; no se aplica</td></tr>
     <tr><td>Salón</td><td><code>esp32dev</code></td><td><code>3.0</code></td><td>Activa</td></tr>
-    <tr><td>Puente CC1101</td><td><code>esp32dev</code></td><td><code>3.0</code></td><td>Activa</td></tr>
+    <tr><td>Puente CC1101</td><td><code>esp32dev</code></td><td><code>3.1</code></td><td>Activa</td></tr>
     <tr><td>Capturador CC1101</td><td><code>esp32dev</code></td><td><code>3.0</code></td><td>Activa</td></tr>
   </tbody>
 </table>
 
-Antes de compilar, ajusta `minimum_chip_revision` en `esp32.framework.advanced` de cada YAML según la revisión del chip de esa unidad. No establezcas un mínimo superior al que soporta el chip; si no conoces la revisión, identifícala consultando el marcado o la documentación del módulo/chip antes de fijar el valor. Si se cambia una placa o se activa una revisión mínima comentada, vuelve a verificarla y actualiza únicamente la configuración del dispositivo correspondiente.
+No establezcas un mínimo superior a la revisión real del chip. Si cambias una placa, vuelve a comprobar su revisión antes de reutilizar la configuración.
+
+> [!TIP]
+> **Primera instalación en una placa cuya revisión desconoces:** lo recomendable es comentar la línea `minimum_chip_revision` con `#` antes de compilar. Compila e instala el firmware y abre los registros del dispositivo en **ESPHome Device Builder**. Al arrancar, el registro muestra la revisión del ESP32, por ejemplo `ESP32 r3.0`. Después, descomenta la línea y escribe la revisión de tu unidad (`minimum_chip_revision: "3.0"` en este ejemplo); vuelve a compilar e instalar para aplicar el ajuste. La compilación por sí sola no detecta la revisión de una placa que aún no se ha consultado.
 
 </details>
 
@@ -349,6 +352,20 @@ Al recibir un código RC-Switch, publica en `casa/ventilador/mando` un JSON con 
 El capturador no forma parte del flujo MQTT. Conéctalo en ESPHome usando la API y abre el registro mientras pulsas botones del mando: `dump: [rc_switch, raw]` informa los códigos que pueda decodificar como RC-Switch y muestra la señal sin procesar cuando no reconozca el protocolo. Anota el protocolo y código recibidos para configurar después el dispositivo que transmite; las señales y códigos dependen del mando.
 
 </details>
+
+## Personalizar los códigos de los ventiladores
+
+Los 32 códigos RF están en [`assets/codigos_ventiladores.yaml`](./assets/codigos_ventiladores.yaml), separados por dormitorio y salón y con el nombre de cada acción. El puente los incluye automáticamente mediante `packages`.
+
+1. Obtén los códigos decimales de tu mando con `capturar_mando_esphome.yaml`.
+2. Sustituye los valores entre comillas de la habitación correspondiente. Conserva los nombres de las variables.
+3. Valida, compila y actualiza únicamente `cc1101_mqtt_central.yaml`. Los relojes siguen enviando las mismas acciones y no requieren cambios.
+
+Por ejemplo, `rf_dormitorio_subir_luz` es el código para subir el brillo del dormitorio. Se admiten códigos de 32 bits; los códigos actuales son ejemplos de los ventiladores de esta instalación.
+
+**En ESPHome Device Builder:** copia también la carpeta `assets` junto al YAML del puente. Pegar solo el YAML principal no incluye este archivo adicional. Edita y compila el puente, no el archivo de códigos por separado.
+
+Si el nuevo mando utiliza otro protocolo, longitud de código o temporización, también habrá que adaptar `remote_transmitter` y la conversión de 32 bits del puente.
 
 ## Mantenimiento
 

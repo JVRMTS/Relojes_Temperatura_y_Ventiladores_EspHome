@@ -15,7 +15,7 @@ esp32:
   framework:
     type: esp-idf
     advanced:
-      minimum_chip_revision: "3.0"     
+      minimum_chip_revision: "3.0" # Tras la primera instalación, consulta los registros en ESPHome Device Builder: muestran la revisión del ESP32 que debes usar aquí. Para una placa desconocida, omite esta opción al compilar por primera vez.
       sram1_as_iram: true
 
 logger:

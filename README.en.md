@@ -204,16 +204,19 @@ All six configurations declare `board: esp32dev`, but the minimum chip revision 
     <tr><th>Device</th><th>Board declared in YAML</th><th><code>minimum_chip_revision</code></th><th>Status</th></tr>
   </thead>
   <tbody>
-    <tr><td>Bathroom</td><td><code>esp32dev</code></td><td>Not specified</td><td>No explicit requirement in the YAML</td></tr>
+    <tr><td>Bathroom</td><td><code>esp32dev</code></td><td><code>3.0</code></td><td>Commented out; not applied</td></tr>
     <tr><td>Office</td><td><code>esp32dev</code></td><td><code>3.1</code></td><td>Active</td></tr>
-    <tr><td>Bedroom</td><td><code>esp32dev</code></td><td><code>3.1</code></td><td>Commented out; not applied</td></tr>
+    <tr><td>Bedroom</td><td><code>esp32dev</code></td><td><code>3.0</code></td><td>Commented out; not applied</td></tr>
     <tr><td>Living room</td><td><code>esp32dev</code></td><td><code>3.0</code></td><td>Active</td></tr>
-    <tr><td>CC1101 bridge</td><td><code>esp32dev</code></td><td><code>3.0</code></td><td>Active</td></tr>
+    <tr><td>CC1101 bridge</td><td><code>esp32dev</code></td><td><code>3.1</code></td><td>Active</td></tr>
     <tr><td>CC1101 capture tool</td><td><code>esp32dev</code></td><td><code>3.0</code></td><td>Active</td></tr>
   </tbody>
 </table>
 
-Before building, adjust `minimum_chip_revision` under `esp32.framework.advanced` in each YAML according to that unit's chip revision. Do not set a minimum higher than the chip supports; if the revision is unknown, identify it from the chip/module marking or documentation before choosing a value. If a board is replaced or a commented-out minimum revision is enabled, verify it again and update only that device's configuration.
+Do not set a minimum above the chip's actual revision. If you replace a board, check its revision again before reusing the configuration.
+
+> [!TIP]
+> **First installation on a board with an unknown revision:** comment out the `minimum_chip_revision` line with `#` before building. Build and flash the firmware, then open the device logs in **ESPHome Device Builder**. At startup, the logs show the ESP32 revision, for example `ESP32 r3.0`. Next, uncomment the line and enter your unit's revision (`minimum_chip_revision: "3.0"` in this example); build and flash again to apply the setting. Building alone cannot detect the revision of a board that has not been queried.
 
 </details>
 

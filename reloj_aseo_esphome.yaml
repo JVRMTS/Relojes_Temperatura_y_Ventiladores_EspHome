@@ -1,6 +1,6 @@
 substitutions:
-  device_name: cc1101-mqtt-central
-  friendly_name: CC1101 MQTT Central
+  device_name: reloj-aseo
+  friendly_name: Reloj Aseo
   wifi_ssid: !secret wifi_ssid
   wifi_password: !secret wifi_password
   api_key_reloj: !secret api_key_reloj
@@ -11,15 +11,15 @@ substitutions:
 esphome:
   name: ${device_name}
   friendly_name: ${friendly_name}
-  min_version: 2026.9.1
 
 esp32:
   board: esp32dev
   framework:
     type: esp-idf
     advanced:
-      flash_chip: generic
+      # minimum_chip_revision: "3.0" # Tras la primera instalación, consulta los registros en ESPHome Device Builder: muestran la revisión del ESP32 que debes usar aquí. Para una placa desconocida, omite esta opción al compilar por primera vez.
       sram1_as_iram: true
+      flash_chip: generic
 
 logger:
 
@@ -140,6 +140,18 @@ display:
   - platform: lcd_pcf8574
     address: 0x27
     dimensions: 20x4
+    # Simbolo de grado propio: no depende de la ROM de caracteres del LCD.
+    user_characters:
+      - position: 0
+        data:
+          - 0b00110
+          - 0b01001
+          - 0b01001
+          - 0b00110
+          - 0b00000
+          - 0b00000
+          - 0b00000
+          - 0b00000
     lambda: |-
       auto now = id(sntp_time).now();
       const char *dias[] = {"Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"};
@@ -147,16 +159,16 @@ display:
       it.printf(7, 0, "%02d:%02d", now.hour, now.minute);
       it.printf(2, 1, "%s %d %s %d", dias[now.day_of_week - 1], now.day_of_month, meses[now.month - 1], now.year);
       if (!isnan(id(temp_aseo).state) && !isnan(id(hum_aseo).state)) {
-        it.printf(0, 2, "Tem:%.1fC", id(temp_aseo).state);
+        it.printf(0, 2, "Tem:%.1f\x08", id(temp_aseo).state);
         it.printf(11, 2, "Hum:%.1f%%", id(hum_aseo).state);
       } else {
-        it.printf(0, 2, "Tem:--C");
+        it.printf(0, 2, "Tem:--\x08");
         it.printf(11, 2, "Hum:--");
       }
       if (!isnan(id(sen_ter).state)) {
-        it.printf(2, 3, "Sen.Ter.:%.1fC", id(sen_ter).state);
+        it.printf(2, 3, "Sen.Ter.:%.1f\x08", id(sen_ter).state);
       } else {
-        it.printf(2, 3, "Sen.Ter.:--");
+        it.printf(2, 3, "Sen.Ter.:--\x08");
       }      
 # Configuración de MQTT
 mqtt:
