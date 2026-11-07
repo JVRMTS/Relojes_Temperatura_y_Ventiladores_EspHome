@@ -123,7 +123,7 @@ El reloj del aseo no utiliza estos recursos.
 
 ## Requisitos y dependencias
 
-- ESPHome 2026.10.2, versión utilizada para las pruebas actuales. El entorno local 2026.9.1 no admite `flash_chip`.
+- ESPHome 2026.10.2 (versión probada).
 - ESP32 compatible con `esp32dev`; framework ESP-IDF.
 - Red Wi-Fi y broker MQTT accesible, con credenciales válidas.
 - **Dispositivos RF:** módulo CC1101 compatible con 433,92 MHz.

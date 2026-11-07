@@ -123,7 +123,7 @@ The bathroom clock does not use these assets.
 
 ## Requirements and dependencies
 
-- ESPHome 2026.10.2, used for the current device tests. The local 2026.9.1 environment does not support `flash_chip`.
+- ESPHome 2026.10.2 (tested version).
 - An ESP32 compatible with `esp32dev`; ESP-IDF framework.
 - Wi-Fi network and an accessible MQTT broker with valid credentials.
 - **RF devices:** CC1101 module compatible with 433.92 MHz.
