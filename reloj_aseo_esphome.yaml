@@ -65,6 +65,7 @@ sensor:
     humidity:
       name: "hum_aseo"
       id: hum_aseo
+    update_interval: 10s
 
   - platform: adc
     id: ldr_raw
@@ -89,7 +90,7 @@ sensor:
     unit_of_measurement: "°C"
     accuracy_decimals: 1
     device_class: temperature
-    update_interval: 2s
+    update_interval: 10s
     lambda: |-
       float temp_c = id(temp_aseo).state;
       float hum = id(hum_aseo).state;
@@ -109,7 +110,7 @@ sensor:
     update_interval: 60s
 
 interval:
-  - interval: 2s
+  - interval: 10s
     then:
       - if:
           condition:
@@ -189,5 +190,6 @@ light:
   - platform: monochromatic
     output: lcd_backlight
     id: lcd_backlight_light
+    internal: true # Control automatico local; no exponer en Home Assistant ni MQTT.
     name: "Retroiluminación LCD"
     icon: "mdi:lightbulb"

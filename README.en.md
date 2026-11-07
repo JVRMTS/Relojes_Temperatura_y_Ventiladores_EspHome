@@ -6,7 +6,7 @@
 
 <p>The Arduino-related programs previously in this repository have been removed, and their functionality has been ported to ESPHome. This repository contains ESPHome configurations for all four clocks and two CC1101 RF devices: an MQTT-to-RF bridge and a capture tool.</p>
 
-<p>Three clocks feature an ILI9488 touchscreen and MQTT controls for the living-room and bedroom fans. The bathroom clock uses a character LCD and publishes its sensor readings. The CC1101 bridge transmits MQTT commands over 433.92 MHz RF and publishes received codes; the capture tool logs remote-control codes.</p>
+<p>Three clocks feature an ILI9488 touchscreen and MQTT controls for the living-room and bedroom fans. The bathroom clock uses a character LCD and publishes its sensor readings. The CC1101 bridge transmits MQTT commands over 433.92 MHz RF and exposes Home Assistant controls; the capture tool logs remote-control codes.</p>
 
 <p><strong>English</strong> | <a href="./README.md">Español</a></p>
 
@@ -36,6 +36,8 @@
   <a href="#building-and-flashing">Installation</a> ·
   <a href="#clock-features">Features</a> ·
   <a href="#mqtt-protocol">MQTT</a> ·
+  <a href="#customizing-fan-codes">RF codes</a> ·
+  <a href="#home-assistant-entities">Home Assistant</a> ·
   <a href="#maintenance">Maintenance</a>
 </p>
 
@@ -94,15 +96,15 @@ The three touchscreen clocks share the same design, hardware, and control logic,
 
 ### CC1101 RF bridge
 
-The [cc1101_mqtt_central.yaml](./cc1101_mqtt_central.yaml) configuration belongs to a separate ESP32 device, not one of the clocks. It bridges MQTT and the fans' RF remotes: it listens on `casa/+/ventilador`, transmits commands over RF, and publishes received codes. It also exposes fan controls and buttons through the native ESPHome API; to see them in Home Assistant, add the device using the ESPHome integration. It uses the ESPHome name `cc1101-mqtt-central`, static IP address `192.168.1.18`, and has no display or environmental sensor.
+The [cc1101_mqtt_central.yaml](./cc1101_mqtt_central.yaml) configuration runs on a separate ESP32, `cc1101-mqtt-central`, at `192.168.1.18`. It receives MQTT actions on `casa/dormitorio/ventilador/set` and `casa/salon/ventilador/set`, resolves their codes from [`assets/codigos_ventiladores.yaml`](./assets/codigos_ventiladores.yaml), and transmits them over RF. Fans, selectors, and buttons are also exposed through the ESPHome API for Home Assistant control. The current bridge is transmit-only: it does not receive remotes, publish received codes, or emit RF reception events. Capturing uses the separate device below.
 
 ### RF remote capture tool
 
 The [capturar_mando_esphome.yaml](./capturar_mando_esphome.yaml) configuration is a separate tool for identifying codes from an RC-Switch-compatible remote or inspecting undecoded RF signals. It uses the ESPHome name `cc1101-captura-mando`, connects over Wi-Fi with a DHCP-assigned address, and exposes logs through the ESPHome API. It does not transmit or use MQTT. Press a remote button and inspect the device logs in ESPHome: RC-Switch codes appear with their protocol and decimal value, while the `raw` decoder helps inspect unrecognized signals.
 
-### Image assets
+### Shared assets
 
-The [`assets/`](./assets/) folder contains the PNG icons used by the touchscreen clocks:
+The [`assets/`](./assets/) folder contains the touchscreen PNGs and the bridge RF code file:
 
 <table>
   <thead>
@@ -113,6 +115,7 @@ The [`assets/`](./assets/) folder contains the PNG icons used by the touchscreen
     <tr><td><code>icono_humedad.png</code></td><td>Humidity</td></tr>
     <tr><td><code>icono_sensacion.png</code></td><td>Heat index</td></tr>
     <tr><td><code>logo_reloj.png</code></td><td>Clock logo</td></tr>
+    <tr><td><a href="./assets/codigos_ventiladores.yaml"><code>codigos_ventiladores.yaml</code></a></td><td>32 editable RF codes: 16 actions per fan</td></tr>
   </tbody>
 </table>
 
@@ -120,7 +123,7 @@ The bathroom clock does not use these assets.
 
 ## Requirements and dependencies
 
-- ESPHome 2026.9.1 or later.
+- ESPHome 2026.10.2, used for the current device tests. The local 2026.9.1 environment does not support `flash_chip`.
 - An ESP32 compatible with `esp32dev`; ESP-IDF framework.
 - Wi-Fi network and an accessible MQTT broker with valid credentials.
 - **RF devices:** CC1101 module compatible with 433.92 MHz.
@@ -169,11 +172,11 @@ LVGL uses a 90-degree rotation and the `mirror_x` transform; the touchscreen use
     <tr><td>SPI MISO</td><td>GPIO19</td></tr>
     <tr><td>SPI MOSI</td><td>GPIO23</td></tr>
     <tr><td>CC1101 CS</td><td>GPIO5</td></tr>
-    <tr><td>CC1101 GDO0 / transmit and receive</td><td>GPIO4</td></tr>
+    <tr><td>CC1101 TX data input (remote_transmitter)</td><td>GPIO2</td></tr>
   </tbody>
 </table>
 
-The module is configured for 433.92 MHz, output power 10, and an 812 kHz filter bandwidth. GPIO4 is shared by the transmitter and receiver; keep `allow_other_uses` in both configurations. Check the module's power supply, logic levels, and wiring before powering it on.
+The bridge transmits on GPIO2 using ASK/OOK at 433.92 MHz, output power 10, symbol rate 5000, and an 812 kHz filter. Packet mode, CRC, and whitening are disabled. `on_transmit` enables TX and `on_complete` returns the CC1101 to idle. This YAML has no `remote_receiver` or shared RX pin.
 
 The capture tool uses the same SPI bus and CS on GPIO5; connect the RF receiver's data output to GPIO4. It is configured for 433.92 MHz with an 812 kHz filter bandwidth and does not transmit.
 
@@ -225,7 +228,7 @@ Do not set a minimum above the chip's actual revision. If you replace a board, c
 <details>
 <summary><strong>Show network and security settings</strong></summary>
 
-The four clock configurations and the MQTT-to-RF bridge use static IP addresses on `192.168.1.0/24` and gateway `192.168.1.1`; the capture tool gets its address via DHCP. The four clocks specify DNS servers `192.168.1.201` and `192.168.1.204`. The clocks and MQTT-to-RF bridge use broker `192.168.1.203:1883`; the capture tool does not connect to MQTT. Check the addresses and adapt them to your network before flashing the firmware.
+The four clock configurations and the MQTT-to-RF bridge use static IP addresses on `192.168.1.0/24` and gateway `192.168.1.1`; the capture tool gets its address via DHCP. The four clocks specify DNS servers `192.168.1.201` and `192.168.1.204`. The clocks and MQTT-to-RF bridge use the broker defined by `!secret broker`, on port `1883`; the capture tool does not connect to MQTT. Check the addresses and adapt them to your network before flashing the firmware.
 
 Create `secrets.yaml` in the ESPHome configuration directory. Do not store real credentials in the repository:
 
@@ -234,6 +237,7 @@ wifi_ssid: "your-wifi-network"
 wifi_password: "your-wifi-password"
 mqtt_username: "mqtt-user"
 mqtt_password: "mqtt-password"
+broker: "192.168.1.203" # Example: replace with your broker address
 api_key_reloj: "valid-32-byte-base64-api-key"
 ```
 
@@ -248,14 +252,14 @@ All four clocks synchronize their time via SNTP using the `Europe/Madrid` time z
 <details>
 <summary><strong>Show installation instructions</strong></summary>
 
-Save the YAML files in the ESPHome configuration directory and place `assets/` alongside the three touchscreen configurations, preserving the relative paths. Build each configuration individually:
+Place the six main YAML files and the `assets/` folder in the ESPHome configuration directory, preserving relative paths. Touchscreen clocks need the PNGs; the bridge needs `assets/codigos_ventiladores.yaml`, an included package rather than a separately compiled device. In Device Builder, paste each complete YAML and copy the assets too. Build each device individually:
 
 ```shell
 esphome compile reloj_aseo_esphome.yaml
 esphome compile reloj_despacho_esphome.yaml
 esphome compile reloj_dormitorio_esphome.yaml
 esphome compile reloj_salon_esphome.yaml
-esphome compile cc1101_mqtt_esphome.yaml
+esphome compile cc1101_mqtt_central.yaml
 esphome compile capturar_mando_esphome.yaml
 ```
 
@@ -283,11 +287,15 @@ The fan-control screen has four rows:
 3. Speeds 1 to 5.
 4. Reverse direction and 2-, 4-, and 8-hour timers.
 
-The interface is not scrollable. The selected fan determines the destination MQTT topic. Published codes are specific to each fan: the codes configured here are the ones I obtained for my own fans and will not work with other fans. Each user must obtain the codes for their own fans and adapt the `enviar_comando_ventilador` table to their receiver.
+The interface is not scrollable. The local-room view shows the time in the heading; selecting another room shows its name instead, with the date below. Temperature and heat index appear as `23.4°`, without `C`; humidity appears as `48.0%`. Each icon and value are centered together horizontally and vertically, with a 4-pixel gap. Display data is refreshed every second.
+
+RF control buttons use a debounce filter: one command is accepted per contact, and input is rearmed after **200 ms with no touch**. A new contact during this interval cancels rearming. The `tactil` log distinguishes accepted and ignored commands. This filter covers all 16 fan and light actions, not room selection, navigation, or Back. Back only changes the page.
+
+Clocks send action names rather than numeric RF codes. Customize all codes in `assets/codigos_ventiladores.yaml`; the clocks' tables do not need editing.
 
 ### Bathroom
 
-The LCD shows the time, date, temperature, humidity, and heat index. The photoresistor on GPIO32 adjusts the backlight through GPIO18. This device publishes readings via MQTT and does not include graphical fan controls.
+The LCD shows time, date, temperature, humidity, and heat index. Temperature and heat index use a custom LCD degree glyph, without `C`. The GPIO32 photoresistor is read every second and drives the GPIO18 backlight PWM (5 kHz), limited to 100/255–255/255. The light is internal (`internal: true`): it is not exposed as a Home Assistant switch or light entity, or through MQTT. Automatic local control remains active. The DHT22 reads temperature and humidity every 10 s; heat index is also recalculated every 10 s and RSSI every 60 s. MQTT publishing runs every 10 s. There are no fan controls.
 
 </details>
 
@@ -296,7 +304,7 @@ The LCD shows the time, date, temperature, humidity, and heat index. The photore
 <details>
 <summary><strong>Show topics and message formats</strong></summary>
 
-All clocks use the `192.168.1.203:1883` broker. They publish every two seconds with QoS 2 and `retain: true`, when valid temperature and humidity readings are available.
+All clocks use `!secret broker` on port `1883`. They publish every 10 seconds with QoS 2 and `retain: true`, when valid temperature and humidity readings are available.
 
 ### Measurement topics
 
@@ -322,36 +330,108 @@ Temperature and heat index are in °C; humidity is in %; and `WiFi_Signal` is in
 
 ### Fan-control topics
 
-The touchscreen clocks send `{"opcion": <code>}` to either `casa/dormitorio/ventilador` or `casa/salon/ventilador`, depending on the selected fan.
+| Fan | Topic |
+|---|---|
+| Bedroom | `casa/dormitorio/ventilador/set` |
+| Living room | `casa/salon/ventilador/set` |
 
-<table>
-  <thead>
-    <tr><th>Internal index</th><th>Action</th></tr>
-  </thead>
-  <tbody>
-    <tr><td>0</td><td>Main light</td></tr>
-    <tr><td>1</td><td>Fan</td></tr>
-    <tr><td>2–4</td><td>Yellow, white, and blue lights</td></tr>
-    <tr><td>5–6</td><td>Decrease and increase brightness</td></tr>
-    <tr><td>7–11</td><td>Speeds 1–5</td></tr>
-    <tr><td>12</td><td>Reverse direction</td></tr>
-    <tr><td>13–15</td><td>2-, 4-, and 8-hour timers</td></tr>
-  </tbody>
-</table>
+Brightness-up example:
 
-Commands are published with QoS 2 and `retain: false` to prevent the broker from replaying an old command after reconnecting. The `{"opcion":0}` value is ignored as a reset placeholder and is not transmitted over RF. Final numeric codes differ between the bedroom and living-room fans and are defined in each YAML file. These are codes for my own fans, not universal codes: each user must obtain the codes for each of their fans and configure their own before using the controls.
+```json
+{"accion":"subir_luz"}
+```
+
+Clocks publish with QoS 2 and `retain: false`. The bridge accepts a text `accion` and rejects unknown actions. The old `opcion` format and topics without `/set` have been removed.
+
+| Clock internal index | MQTT action |
+|---|---|
+| 0 | `luz` |
+| 1 | `ventilador` |
+| 2 | `luz_amarilla` |
+| 3 | `luz_blanca` |
+| 4 | `luz_azul` |
+| 5 | `bajar_luz` |
+| 6 | `subir_luz` |
+| 7 | `velocidad_1` |
+| 8 | `velocidad_2` |
+| 9 | `velocidad_3` |
+| 10 | `velocidad_4` |
+| 11 | `velocidad_5` |
+| 12 | `invertir_giro` |
+| 13 | `temporizador_2h` |
+| 14 | `temporizador_4h` |
+| 15 | `temporizador_8h` |
 
 ### CC1101 RF bridge
 
-The bridge subscribes to `casa/+/ventilador` and accepts a JSON object with `opcion` as an unsigned 32-bit integer, for example `{"opcion": 123456}`. It converts the integer to a 32-bit binary sequence and transmits it using the RC-Switch protocol configured in the YAML (390 µs pulse, `[23, 1]` sync, `zero: [1, 2]` and `one: [2, 1]`, inverted signal, and two repeats). The RF parameters and transmitted code must match the receiver and remote being controlled; they are not universal.
+MQTT actions and native Home Assistant controls use the same table, with values supplied by `assets/codigos_ventiladores.yaml`. The selected code is converted to 32 bits and transmitted with a 390 µs pulse, `[23, 1]` sync, `[1, 2]` zero, `[2, 1]` one, inverted signal, and **2 transmissions separated by 10 ms**. This setting is retained because a single transmission did not work correctly in testing. `non_blocking: true` is enabled and the scripts use `queued` mode.
 
-When an RC-Switch code is received, the bridge publishes a JSON object containing the protocol and code to `casa/ventilador/mando`, for example `{"protocolo":1,"codigo":"123456"}`. This publication uses QoS 0 and is not retained. The bridge also updates the ESPHome **Último código mando ventilador** text sensor and emits the Home Assistant event `esphome.rf_fan_remote_received` with `protocol` and `code` fields.
+RF capture uses `capturar_mando_esphome.yaml`. The bridge does not publish `casa/ventilador/mando`, provide a last-received-code sensor, or emit `esphome.rf_fan_remote_received`.
 
 ### RF remote capture tool
 
 The capture tool is not part of the MQTT flow. Connect to it through the ESPHome API and open the device logs while pressing remote buttons: `dump: [rc_switch, raw]` reports codes it can decode as RC-Switch and displays raw signal data when it cannot recognize the protocol. Record the protocol and code so they can be configured on the transmitting device; signals and codes depend on the remote.
 
 </details>
+
+## Customizing fan codes
+
+[`assets/codigos_ventiladores.yaml`](./assets/codigos_ventiladores.yaml) contains **32 decimal 32-bit codes**: 16 bedroom actions and 16 living-room actions. These are examples for this installation's remotes, not universal codes.
+
+1. Flash the capture tool and inspect its logs while pressing each remote button. Record the code and protocol.
+2. Replace the quoted values in the code file, keeping all 32 variable names.
+3. Validate, build, and flash only `cc1101_mqtt_central.yaml`. The clocks and native Home Assistant controls automatically use the bridge's same table.
+
+```yaml
+substitutions:
+  rf_dormitorio_subir_luz: "1606450958"
+  rf_dormitorio_bajar_luz: "4123033358"
+```
+
+This snippet is only an example; keep all actions in the complete file. The bridge includes it as follows:
+
+```yaml
+packages:
+  codigos_rf: !include assets/codigos_ventiladores.yaml
+```
+
+**Copy `assets/codigos_ventiladores.yaml` into Device Builder too**, alongside the other assets. Pasting only the main YAML is not enough. For a remote with different protocol, code length, or timing, also adapt transmission and the bridge's 32-bit conversion.
+
+## Home Assistant entities
+
+Add each device through Home Assistant's **ESPHome integration**, using discovery or its IP and the `api_key_reloj` encryption key. The API exposes the entities below; MQTT still carries inter-clock readings and clock-to-bridge commands. Actual `entity_id` values depend on names and your Home Assistant entity registry.
+
+| Device | Declared entities |
+|---|---|
+| Office, bedroom, living room | 4 sensors per clock: temperature, humidity, heat index, Wi-Fi signal |
+| Bathroom | 5 sensors: `temp_aseo`, `hum_aseo`, `Sensación Térmica`, `LDR ADC raw`, `Aseo senal wifi` |
+| CC1101 bridge | 2 fans, 4 selectors, 8 buttons (14 controls) |
+| CC1101 capture tool | No custom sensors, fans, or buttons; captured codes appear in the logs |
+
+The bathroom backlight is internal and automatic, not a controllable entity. If it was previously exposed, an old unavailable entry may remain after updating; remove it from the registry if necessary. The bathroom and bridge YAMLs do not disable MQTT discovery; if you also use the MQTT integration, check for duplicate entities. The three touchscreen clocks explicitly set `discovery: false`.
+
+### Bridge controls
+
+These are the names declared in the YAML (kept in Spanish):
+
+| Type | Name |
+|---|---|
+| `fan` | Ventilador Dormitorio |
+| `fan` | Ventilador Salón |
+| `select` | Ventilador Dormitorio - Color Luz |
+| `select` | Ventilador Salón - Color Luz |
+| `select` | Ventilador Dormitorio - Timer |
+| `select` | Ventilador Salón - Timer |
+| `button` | Ventilador Dormitorio - Luz General |
+| `button` | Ventilador Dormitorio - Luz Subir |
+| `button` | Ventilador Dormitorio - Luz Bajar |
+| `button` | Ventilador Dormitorio - Invertir giro |
+| `button` | Ventilador Salón - Luz General |
+| `button` | Ventilador Salón - Luz Subir |
+| `button` | Ventilador Salón - Luz Bajar |
+| `button` | Ventilador Salón - Invertir giro |
+
+Fans provide 5 speeds. Selectors offer `Amarilla`, `Blanca`, `Azul` and `2h`, `4h`, `8h` timers. Main light, brightness up/down, and reverse are action buttons. **Turning a fan on or off sends the same toggle code**; there is no RF feedback of its physical state. Selectors are optimistic. Using the physical remote can leave Home Assistant's displayed state out of sync with the fan.
 
 ## Maintenance
 
@@ -365,3 +445,7 @@ The capture tool is not part of the MQTT flow. Connect to it through the ESPHome
 - If the MQTT or fan-control protocol changes, update the corresponding publishers and consumers and validate the installation before deployment.
 
 </details>
+
+## Files to publish on GitHub
+
+Include the six device YAMLs, the complete `assets/` folder (PNGs and codes), both READMEs, and `.gitignore`. The ignore file excludes `.esphome/`, `.venv/`, `__pycache__/`, `*.pyc`, and `secrets.yaml`. Do not publish real credentials; use dummy values in any example secrets file. These exclusions apply to Git, not OneDrive.

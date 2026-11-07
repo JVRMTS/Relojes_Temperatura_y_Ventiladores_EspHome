@@ -421,7 +421,7 @@ interval:
             }
             return std::string(value);
 
-  - interval: 2s
+  - interval: 10s
     then:
       - if:
           condition:
