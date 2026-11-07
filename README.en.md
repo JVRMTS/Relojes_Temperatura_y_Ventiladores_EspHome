@@ -4,7 +4,7 @@
 
 <p><strong>Four connected clocks, an RF bridge, and a remote-capture tool.</strong></p>
 
-<p>The Arduino-related programs previously in this repository have been removed, and their functionality has been ported to ESPHome. This repository contains ESPHome configurations for all four clocks and two CC1101 RF devices: an MQTT-to-RF bridge and a capture tool.</p>
+<p>This repository contains ESPHome configurations for all four clocks and two CC1101 RF devices: an MQTT-to-RF bridge and a capture tool.</p>
 
 <p>Three clocks feature an ILI9488 touchscreen and MQTT controls for the living-room and bedroom fans. The bathroom clock uses a character LCD and publishes its sensor readings. The CC1101 bridge transmits MQTT commands over 433.92 MHz RF and exposes Home Assistant controls; the capture tool logs remote-control codes.</p>
 
@@ -96,7 +96,7 @@ The three touchscreen clocks share the same design, hardware, and control logic,
 
 ### CC1101 RF bridge
 
-The [cc1101_mqtt_central.yaml](./cc1101_mqtt_central.yaml) configuration runs on a separate ESP32, `cc1101-mqtt-central`, at `192.168.1.18`. It receives MQTT actions on `casa/dormitorio/ventilador/set` and `casa/salon/ventilador/set`, resolves their codes from [`assets/codigos_ventiladores.yaml`](./assets/codigos_ventiladores.yaml), and transmits them over RF. Fans, selectors, and buttons are also exposed through the ESPHome API for Home Assistant control. The current bridge is transmit-only: it does not receive remotes, publish received codes, or emit RF reception events. Capturing uses the separate device below.
+The [cc1101_mqtt_central.yaml](./cc1101_mqtt_central.yaml) configuration runs on a separate ESP32, `cc1101-mqtt-central`, at `192.168.1.18`. It receives MQTT actions on `casa/dormitorio/ventilador/set` and `casa/salon/ventilador/set`, resolves their codes from [`assets/codigos_ventiladores.yaml`](./assets/codigos_ventiladores.yaml), and transmits them over RF. Fans, selectors, and buttons are also exposed through the ESPHome API for Home Assistant control. The bridge handles RF transmission. Remote capture uses the separate device below.
 
 ### RF remote capture tool
 
@@ -230,14 +230,14 @@ Do not set a minimum above the chip's actual revision. If you replace a board, c
 
 The four clock configurations and the MQTT-to-RF bridge use static IP addresses on `192.168.1.0/24` and gateway `192.168.1.1`; the capture tool gets its address via DHCP. The four clocks specify DNS servers `192.168.1.201` and `192.168.1.204`. The clocks and MQTT-to-RF bridge use the broker defined by `!secret broker`, on port `1883`; the capture tool does not connect to MQTT. Check the addresses and adapt them to your network before flashing the firmware.
 
-Create `secrets.yaml` in the ESPHome configuration directory. Do not store real credentials in the repository:
+Device YAMLs read credentials through `!secret` (for example, `broker: !secret broker`); they do not contain the broker address. Create **`secrets.yaml`** with your own values. The following block is an example of that file, not of the device YAML. Do not publish your secrets in the repository:
 
 ```yaml
 wifi_ssid: "your-wifi-network"
 wifi_password: "your-wifi-password"
 mqtt_username: "mqtt-user"
 mqtt_password: "mqtt-password"
-broker: "192.168.1.203" # Example: replace with your broker address
+broker: "your-mqtt-broker.local" # Replace with your broker hostname or address
 api_key_reloj: "valid-32-byte-base64-api-key"
 ```
 
@@ -282,7 +282,7 @@ The home screen shows the time, date, temperature, humidity, and heat index. It 
 
 The fan-control screen has four rows:
 
-1. Main light, back, and fan.
+1. Fan light, back, and fan on/off.
 2. Decrease brightness, yellow/white/blue lights, and increase brightness.
 3. Speeds 1 to 5.
 4. Reverse direction and 2-, 4-, and 8-hour timers.
@@ -295,7 +295,7 @@ Clocks send action names rather than numeric RF codes. Customize all codes in `a
 
 ### Bathroom
 
-The LCD shows time, date, temperature, humidity, and heat index. Temperature and heat index use a custom LCD degree glyph, without `C`. The GPIO32 photoresistor is read every second and drives the GPIO18 backlight PWM (5 kHz), limited to 100/255–255/255. The light is internal (`internal: true`): it is not exposed as a Home Assistant switch or light entity, or through MQTT. Automatic local control remains active. The DHT22 reads temperature and humidity every 10 s; heat index is also recalculated every 10 s and RSSI every 60 s. MQTT publishing runs every 10 s. There are no fan controls.
+The LCD shows time, date, temperature, humidity, and heat index. The GPIO32 photoresistor is read every second and drives the GPIO18 backlight PWM (5 kHz), limited to 100/255–255/255. The light is internal (`internal: true`): it is not exposed as a Home Assistant switch or light entity, or through MQTT. Automatic local control remains active. The DHT22 reads temperature and humidity every 10 s; heat index is also recalculated every 10 s and RSSI every 60 s. MQTT publishing runs every 10 s. There are no fan controls.
 
 </details>
 
@@ -341,7 +341,7 @@ Brightness-up example:
 {"accion":"subir_luz"}
 ```
 
-Clocks publish with QoS 2 and `retain: false`. The bridge accepts a text `accion` and rejects unknown actions. The old `opcion` format and topics without `/set` have been removed.
+Clocks publish with QoS 2 and `retain: false`. The bridge accepts a text `accion` and rejects unknown actions.
 
 | Clock internal index | MQTT action |
 |---|---|
@@ -364,9 +364,9 @@ Clocks publish with QoS 2 and `retain: false`. The bridge accepts a text `accion
 
 ### CC1101 RF bridge
 
-MQTT actions and native Home Assistant controls use the same table, with values supplied by `assets/codigos_ventiladores.yaml`. The selected code is converted to 32 bits and transmitted with a 390 µs pulse, `[23, 1]` sync, `[1, 2]` zero, `[2, 1]` one, inverted signal, and **2 transmissions separated by 10 ms**. This setting is retained because a single transmission did not work correctly in testing. `non_blocking: true` is enabled and the scripts use `queued` mode.
+MQTT actions and native Home Assistant controls use the same table, with values supplied by `assets/codigos_ventiladores.yaml`. The selected code is converted to 32 bits and transmitted with a 390 µs pulse, `[23, 1]` sync, `[1, 2]` zero, `[2, 1]` one, inverted signal, and **2 transmissions separated by 10 ms**. `non_blocking: true` is enabled and the scripts use `queued` mode.
 
-RF capture uses `capturar_mando_esphome.yaml`. The bridge does not publish `casa/ventilador/mando`, provide a last-received-code sensor, or emit `esphome.rf_fan_remote_received`.
+RF capture uses [`capturar_mando_esphome.yaml`](./capturar_mando_esphome.yaml), which shows captured codes in its logs.
 
 ### RF remote capture tool
 
@@ -399,7 +399,7 @@ packages:
 
 ## Home Assistant entities
 
-Add each device through Home Assistant's **ESPHome integration**, using discovery or its IP and the `api_key_reloj` encryption key. The API exposes the entities below; MQTT still carries inter-clock readings and clock-to-bridge commands. Actual `entity_id` values depend on names and your Home Assistant entity registry.
+Add each device through Home Assistant's **ESPHome integration**, using discovery or its IP and the `api_key_reloj` encryption key. The API exposes the entities below; MQTT carries inter-clock readings and clock-to-bridge commands. Actual `entity_id` values depend on names and your Home Assistant entity registry.
 
 | Device | Declared entities |
 |---|---|
@@ -408,7 +408,7 @@ Add each device through Home Assistant's **ESPHome integration**, using discover
 | CC1101 bridge | 2 fans, 4 selectors, 8 buttons (14 controls) |
 | CC1101 capture tool | No custom sensors, fans, or buttons; captured codes appear in the logs |
 
-The bathroom backlight is internal and automatic, not a controllable entity. If it was previously exposed, an old unavailable entry may remain after updating; remove it from the registry if necessary. The bathroom and bridge YAMLs do not disable MQTT discovery; if you also use the MQTT integration, check for duplicate entities. The three touchscreen clocks explicitly set `discovery: false`.
+The bathroom backlight is internal and automatic, not a controllable entity. The bathroom and bridge YAMLs do not disable MQTT discovery; if you also use the MQTT integration, check for duplicate entities. The three touchscreen clocks explicitly set `discovery: false`.
 
 ### Bridge controls
 
@@ -431,7 +431,7 @@ These are the names declared in the YAML (kept in Spanish):
 | `button` | Ventilador Salón - Luz Bajar |
 | `button` | Ventilador Salón - Invertir giro |
 
-Fans provide 5 speeds. Selectors offer `Amarilla`, `Blanca`, `Azul` and `2h`, `4h`, `8h` timers. Main light, brightness up/down, and reverse are action buttons. **Turning a fan on or off sends the same toggle code**; there is no RF feedback of its physical state. Selectors are optimistic. Using the physical remote can leave Home Assistant's displayed state out of sync with the fan.
+Fans provide 5 speeds. Selectors offer `Amarilla`, `Blanca`, `Azul` and `2h`, `4h`, `8h` timers. The fan light, brightness up/down, and reverse are controlled through action buttons. The buttons named “Luz General” in the YAML and the table above operate each fan’s integrated light. **Turning a fan on or off sends the same toggle code**; there is no RF feedback of its physical state. Selectors are optimistic. Using the physical remote can leave Home Assistant's displayed state out of sync with the fan.
 
 ## Maintenance
 

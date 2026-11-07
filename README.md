@@ -4,7 +4,7 @@
 
 <p><strong>Cuatro relojes conectados, un puente RF y una herramienta para capturar mandos.</strong></p>
 
-<p>Los programas relacionados con Arduino que estaban anteriormente en este repositorio se han eliminado y sus funciones se han portado a ESPHome. Este repositorio contiene las configuraciones ESPHome de los cuatro relojes y dos dispositivos RF con CC1101: un puente MQTT–RF y una herramienta de captura.</p>
+<p>Este repositorio contiene las configuraciones ESPHome de los cuatro relojes y dos dispositivos RF con CC1101: un puente MQTT–RF y una herramienta de captura.</p>
 
 <p>Tres relojes cuentan con pantalla táctil ILI9488 y control MQTT de los ventiladores del salón y del dormitorio. El reloj del aseo usa una pantalla LCD de caracteres y publica sus mediciones. El puente CC1101 transmite comandos MQTT por RF de 433,92 MHz y expone controles en Home Assistant; el capturador muestra en el registro los códigos del mando.</p>
 
@@ -96,7 +96,7 @@ Los tres relojes táctiles comparten diseño, hardware y lógica de control, con
 
 ### Puente RF CC1101
 
-La configuración [cc1101_mqtt_central.yaml](./cc1101_mqtt_central.yaml) corresponde a un ESP32 independiente, `cc1101-mqtt-central`, con IP `192.168.1.18`. Recibe acciones MQTT en `casa/dormitorio/ventilador/set` y `casa/salon/ventilador/set`, busca el código en [`assets/codigos_ventiladores.yaml`](./assets/codigos_ventiladores.yaml) y lo transmite por RF. Expone además ventiladores, selectores y botones mediante la API ESPHome para controlarlos desde Home Assistant. El puente actual solo transmite: no recibe mandos, publica códigos recibidos ni genera eventos de recepción RF. La captura corresponde al dispositivo independiente descrito a continuación.
+La configuración [cc1101_mqtt_central.yaml](./cc1101_mqtt_central.yaml) corresponde a un ESP32 independiente, `cc1101-mqtt-central`, con IP `192.168.1.18`. Recibe acciones MQTT en `casa/dormitorio/ventilador/set` y `casa/salon/ventilador/set`, busca el código en [`assets/codigos_ventiladores.yaml`](./assets/codigos_ventiladores.yaml) y lo transmite por RF. Expone además ventiladores, selectores y botones mediante la API ESPHome para controlarlos desde Home Assistant. El puente se encarga de la transmisión RF. La captura de mandos corresponde al dispositivo independiente descrito a continuación.
 
 ### Capturador de mandos RF
 
@@ -230,14 +230,14 @@ No establezcas un mínimo superior a la revisión real del chip. Si cambias una 
 
 Las cuatro configuraciones de reloj y el puente MQTT–RF usan IP estática dentro de `192.168.1.0/24` y gateway `192.168.1.1`; el capturador obtiene su IP por DHCP. Los cuatro relojes declaran los DNS `192.168.1.201` y `192.168.1.204`. Los relojes y el puente MQTT–RF usan el broker definido por `!secret broker`, puerto `1883`; el capturador no se conecta a MQTT. Comprueba las direcciones y adáptalas a tu red antes de cargar el firmware.
 
-Crea `secrets.yaml` en el directorio de configuración de ESPHome. No guardes credenciales reales en el repositorio:
+Los YAML de los dispositivos leen las credenciales mediante `!secret` (por ejemplo, `broker: !secret broker`); no contienen la dirección del broker. Crea un archivo **`secrets.yaml`** con tus valores reales. El siguiente bloque es un ejemplo del contenido de ese archivo, no del YAML del dispositivo. No publiques tus secretos en el repositorio:
 
 ```yaml
 wifi_ssid: "nombre-de-la-red"
 wifi_password: "clave-wifi"
 mqtt_username: "usuario-mqtt"
 mqtt_password: "clave-mqtt"
-broker: "192.168.1.203" # Ejemplo: adapta esta IP a tu broker
+broker: "tu-broker-mqtt.local" # Sustituye por el nombre o la dirección de tu broker
 api_key_reloj: "clave-api-base64-de-32-bytes"
 ```
 
@@ -282,7 +282,7 @@ La pantalla principal muestra hora, fecha, temperatura, humedad y sensación té
 
 El control de ventilador tiene cuatro filas:
 
-1. Luz general, volver y ventilador.
+1. Luz del ventilador, volver y encendido/apagado del ventilador.
 2. Bajar brillo, luces amarilla/blanca/azul y subir brillo.
 3. Velocidades 1 a 5.
 4. Invertir giro y temporizadores de 2, 4 y 8 horas.
@@ -295,7 +295,7 @@ Los relojes envían nombres de acción, no códigos numéricos. Todos los códig
 
 ### Aseo
 
-La LCD muestra hora, fecha, temperatura, humedad y sensación térmica. Temperatura y sensación térmica incluyen un símbolo de grado propio del LCD, sin `C`. La fotoresistencia de GPIO32 se lee cada segundo y regula la retroiluminación por PWM en GPIO18 (5 kHz), limitada entre 100/255 y 255/255. La luz se mantiene interna (`internal: true`): no aparece como interruptor o entidad de luz en Home Assistant ni se expone por MQTT. Cualquier ajuste automático continúa funcionando localmente. El DHT22 lee temperatura y humedad cada 10 s; la sensación térmica también se recalcula cada 10 s y el RSSI cada 60 s. La publicación MQTT se realiza cada 10 s. No tiene controles de ventiladores.
+La LCD muestra hora, fecha, temperatura, humedad y sensación térmica. La fotoresistencia de GPIO32 se lee cada segundo y regula la retroiluminación por PWM en GPIO18 (5 kHz), limitada entre 100/255 y 255/255. La luz se mantiene interna (`internal: true`): no aparece como interruptor o entidad de luz en Home Assistant ni se expone por MQTT. Cualquier ajuste automático continúa funcionando localmente. El DHT22 lee temperatura y humedad cada 10 s; la sensación térmica también se recalcula cada 10 s y el RSSI cada 60 s. La publicación MQTT se realiza cada 10 s. No tiene controles de ventiladores.
 
 </details>
 
@@ -341,7 +341,7 @@ Ejemplo para subir el brillo:
 {"accion":"subir_luz"}
 ```
 
-Los relojes publican con QoS 2 y `retain: false`. El puente acepta `accion` como texto y rechaza las acciones desconocidas. El formato antiguo `opcion` y los temas sin `/set` se han eliminado.
+Los relojes publican con QoS 2 y `retain: false`. El puente acepta `accion` como texto y rechaza las acciones desconocidas.
 
 | Índice interno del reloj | Acción MQTT |
 |---|---|
@@ -364,9 +364,9 @@ Los relojes publican con QoS 2 y `retain: false`. El puente acepta `accion` como
 
 ### Puente RF CC1101
 
-Las acciones MQTT y los controles nativos de Home Assistant utilizan la misma tabla, cuyos valores proceden de `assets/codigos_ventiladores.yaml`. El código elegido se convierte en 32 bits y se transmite con pulso de 390 µs, sincronización `[23, 1]`, cero `[1, 2]`, uno `[2, 1]`, señal invertida y **2 transmisiones con 10 ms entre ellas**. Se conserva este valor porque una sola transmisión no funcionó correctamente en las pruebas. `non_blocking: true` está activo y los scripts están configurados en modo `queued`.
+Las acciones MQTT y los controles nativos de Home Assistant utilizan la misma tabla, cuyos valores proceden de `assets/codigos_ventiladores.yaml`. El código elegido se convierte en 32 bits y se transmite con pulso de 390 µs, sincronización `[23, 1]`, cero `[1, 2]`, uno `[2, 1]`, señal invertida y **2 transmisiones con 10 ms entre ellas**. `non_blocking: true` está activo y los scripts están configurados en modo `queued`.
 
-La captura RF se realiza con `capturar_mando_esphome.yaml`. El puente no publica `casa/ventilador/mando`, no tiene sensor «Último código mando ventilador» ni emite `esphome.rf_fan_remote_received`.
+La captura RF se realiza con [`capturar_mando_esphome.yaml`](./capturar_mando_esphome.yaml), que muestra los códigos en sus registros.
 
 ### Capturador de mandos RF
 
@@ -410,7 +410,7 @@ Añade cada dispositivo mediante la **integración ESPHome** de Home Assistant, 
 | Puente CC1101 | 2 ventiladores, 4 selectores y 8 botones (14 controles) |
 | Capturador CC1101 | Sin sensores, ventiladores ni botones propios; códigos visibles en los registros |
 
-La retroiluminación del aseo es interna y automática, no una entidad controlable. Si ya aparecía en Home Assistant, puede quedar una entrada antigua no disponible tras actualizar; elimínala de su registro si persiste. El aseo y el puente no desactivan el descubrimiento MQTT en sus YAML; si también usas la integración MQTT, revisa posibles entidades duplicadas. Los tres táctiles sí declaran `discovery: false`.
+La retroiluminación del aseo es interna y automática, no una entidad controlable. El aseo y el puente no desactivan el descubrimiento MQTT en sus YAML; si también usas la integración MQTT, revisa posibles entidades duplicadas. Los tres táctiles sí declaran `discovery: false`.
 
 ### Controles del puente
 
@@ -433,7 +433,7 @@ Los nombres declarados en el YAML son:
 | `button` | Ventilador Salón - Luz Bajar |
 | `button` | Ventilador Salón - Invertir giro |
 
-Los ventiladores tienen 5 velocidades; los selectores ofrecen `Amarilla`, `Blanca`, `Azul` y temporizadores `2h`, `4h`, `8h`. Luz general, subir/bajar brillo e invertir giro son botones de acción. **Encender y apagar envían el mismo código de alternancia**; no hay confirmación RF del estado físico. Los selectores son optimistas. Una pulsación del mando físico puede dejar los estados mostrados en Home Assistant sin correspondencia con el ventilador real.
+Los ventiladores tienen 5 velocidades; los selectores ofrecen `Amarilla`, `Blanca`, `Azul` y temporizadores `2h`, `4h`, `8h`. La luz del ventilador, subir/bajar brillo e invertir giro se controlan mediante botones de acción. Los botones llamados «Luz General» en el YAML y en la tabla anterior corresponden a la luz integrada de cada ventilador. **Encender y apagar envían el mismo código de alternancia**; no hay confirmación RF del estado físico. Los selectores son optimistas. Una pulsación del mando físico puede dejar los estados mostrados en Home Assistant sin correspondencia con el ventilador real.
 
 ## Mantenimiento
 
