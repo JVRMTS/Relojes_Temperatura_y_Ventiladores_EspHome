@@ -445,7 +445,3 @@ Fans provide 5 speeds. Selectors offer `Amarilla`, `Blanca`, `Azul` and `2h`, `4
 - If the MQTT or fan-control protocol changes, update the corresponding publishers and consumers and validate the installation before deployment.
 
 </details>
-
-## Files to publish on GitHub
-
-Include the six device YAMLs, the complete `assets/` folder (PNGs and codes), both READMEs, and `.gitignore`. The ignore file excludes `.esphome/`, `.venv/`, `__pycache__/`, `*.pyc`, and `secrets.yaml`. Do not publish real credentials; use dummy values in any example secrets file. These exclusions apply to Git, not OneDrive.

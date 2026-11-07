@@ -447,7 +447,3 @@ Los ventiladores tienen 5 velocidades; los selectores ofrecen `Amarilla`, `Blanc
 - Si cambia el protocolo MQTT o el de los ventiladores, actualiza productores y consumidores y valida la instalación antes del despliegue.
 
 </details>
-
-## Archivos para GitHub
-
-Incluye los seis YAML de dispositivo, `assets/` completo (PNG y códigos), ambos README y `.gitignore`. El `.gitignore` excluye `.esphome/`, `.venv/`, `__pycache__/`, `*.pyc` y `secrets.yaml`. No publiques credenciales reales; un archivo de ejemplo debe contener valores ficticios. Estas exclusiones afectan a Git, no a OneDrive.
