@@ -295,7 +295,7 @@ Clocks send action names rather than numeric RF codes. Customize all codes in `a
 
 ### Bathroom
 
-The LCD shows time, date, temperature, humidity, and heat index. The GPIO32 photoresistor is read every second and drives the GPIO18 backlight PWM (5 kHz), limited to 100/255–255/255. The light is internal (`internal: true`): it is not exposed as a Home Assistant switch or light entity, or through MQTT. Automatic local control remains active. The DHT22 reads temperature and humidity every 10 s; heat index is also recalculated every 10 s and RSSI every 60 s. MQTT publishing runs every 10 s. There are no fan controls.
+The LCD shows time, date, temperature, humidity, and heat index. The GPIO32 photoresistor is read every second. It exposes `Luz ambiente relativa` as a percentage of the ADC range (0–4095 → 0–100 %), not volts or lux; the raw reading is internal. The original reading drives the GPIO18 backlight PWM (5 kHz), limited to 100/255–255/255. The light is internal (`internal: true`): it is not exposed as a Home Assistant switch or light entity, or through MQTT. Automatic local control remains active. The DHT22 reads temperature and humidity every 10 s; heat index is also recalculated every 10 s and RSSI every 60 s. MQTT publishing runs every 10 s. There are no fan controls.
 
 </details>
 
@@ -404,7 +404,7 @@ Add each device through Home Assistant's **ESPHome integration**, using discover
 | Device | Declared entities |
 |---|---|
 | Office, bedroom, living room | 4 sensors per clock: temperature, humidity, heat index, Wi-Fi signal |
-| Bathroom | 5 sensors: `temp_aseo`, `hum_aseo`, `Sensación Térmica`, `LDR ADC raw`, `Aseo senal wifi` |
+| Bathroom | 5 sensors: `temp_aseo`, `hum_aseo`, `Sensación Térmica`, `Luz ambiente relativa`, `Aseo senal wifi` |
 | CC1101 bridge | 2 fans, 4 selectors, 8 buttons (14 controls) |
 | CC1101 capture tool | No custom sensors, fans, or buttons; captured codes appear in the logs |
 

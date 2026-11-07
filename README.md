@@ -295,7 +295,7 @@ Los relojes envían nombres de acción, no códigos numéricos. Todos los códig
 
 ### Aseo
 
-La LCD muestra hora, fecha, temperatura, humedad y sensación térmica. La fotoresistencia de GPIO32 se lee cada segundo y regula la retroiluminación por PWM en GPIO18 (5 kHz), limitada entre 100/255 y 255/255. La luz se mantiene interna (`internal: true`): no aparece como interruptor o entidad de luz en Home Assistant ni se expone por MQTT. Cualquier ajuste automático continúa funcionando localmente. El DHT22 lee temperatura y humedad cada 10 s; la sensación térmica también se recalcula cada 10 s y el RSSI cada 60 s. La publicación MQTT se realiza cada 10 s. No tiene controles de ventiladores.
+La LCD muestra hora, fecha, temperatura, humedad y sensación térmica. La fotoresistencia de GPIO32 se lee cada segundo. Expone `Luz ambiente relativa` como porcentaje de la escala ADC (0–4095 → 0–100 %), no como voltios ni lux; la lectura bruta es interna. La lectura original regula la retroiluminación por PWM en GPIO18 (5 kHz), limitada entre 100/255 y 255/255. La luz se mantiene interna (`internal: true`): no aparece como interruptor o entidad de luz en Home Assistant ni se expone por MQTT. Cualquier ajuste automático continúa funcionando localmente. El DHT22 lee temperatura y humedad cada 10 s; la sensación térmica también se recalcula cada 10 s y el RSSI cada 60 s. La publicación MQTT se realiza cada 10 s. No tiene controles de ventiladores.
 
 </details>
 
@@ -406,7 +406,7 @@ Añade cada dispositivo mediante la **integración ESPHome** de Home Assistant, 
 | Dispositivo | Entidades declaradas |
 |---|---|
 | Despacho, dormitorio y salón | 4 sensores por reloj: temperatura, humedad, sensación térmica y señal Wi-Fi |
-| Aseo | 5 sensores: `temp_aseo`, `hum_aseo`, `Sensación Térmica`, `LDR ADC raw`, `Aseo senal wifi` |
+| Aseo | 5 sensores: `temp_aseo`, `hum_aseo`, `Sensación Térmica`, `Luz ambiente relativa`, `Aseo senal wifi` |
 | Puente CC1101 | 2 ventiladores, 4 selectores y 8 botones (14 controles) |
 | Capturador CC1101 | Sin sensores, ventiladores ni botones propios; códigos visibles en los registros |
 

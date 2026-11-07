@@ -17,7 +17,7 @@ esp32:
   framework:
     type: esp-idf
     advanced:
-      # minimum_chip_revision: "3.0" # Tras la primera instalación, consulta los registros en ESPHome Device Builder: muestran la revisión del ESP32 que debes usar aquí. Para una placa desconocida, omite esta opción al compilar por primera vez.
+      minimum_chip_revision: "1.0" # Tras la primera instalación, consulta los registros en ESPHome Device Builder: muestran la revisión del ESP32 que debes usar aquí. Para una placa desconocida, omite esta opción al compilar por primera vez.
       sram1_as_iram: true
       flash_chip: generic
 
@@ -71,11 +71,20 @@ sensor:
     id: ldr_raw
     pin: GPIO32
     name: "LDR ADC raw"
+    internal: true
+    unit_of_measurement: ""
+    device_class: ""
+    accuracy_decimals: 0
     attenuation: 12db
     raw: true
     update_interval: 1000ms
     on_value:
       then:
+        - sensor.template.publish:
+            id: luz_ambiente_relativa
+            state: !lambda |-
+              // Porcentaje de la escala ADC; no es una medida calibrada en lux.
+              return fmaxf(0.0f, fminf(100.0f, x * 100.0f / 4095.0f));
         - light.turn_on:
             id: lcd_backlight_light
             transition_length: 0s
@@ -84,6 +93,15 @@ sensor:
               if (valor_pwm < 100) valor_pwm = 100;
               if (valor_pwm > 255) valor_pwm = 255;
               return valor_pwm / 255.0f;
+  - platform: template
+    id: luz_ambiente_relativa
+    name: "Luz ambiente relativa"
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    state_class: measurement
+    icon: "mdi:brightness-6"
+    update_interval: never
+
   - platform: template
     id: sen_ter
     name: "Sensación Térmica"
@@ -191,5 +209,3 @@ light:
     output: lcd_backlight
     id: lcd_backlight_light
     internal: true # Control automatico local; no exponer en Home Assistant ni MQTT.
-    name: "Retroiluminación LCD"
-    icon: "mdi:lightbulb"
