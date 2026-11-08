@@ -96,7 +96,14 @@ The three touchscreen clocks share the same design, hardware, and control logic,
 
 ### CC1101 RF bridge
 
+Before each RF command, the bridge queries the Zigbee2MQTT switches at `zigbee2mqtt/Ventilador Dormitorio` and `zigbee2mqtt/Ventilador Salon` through their `/get` topics. If the switch is off or does not respond within 2 seconds, it publishes `{"state":"ON"}` to the corresponding `/set` topic. It waits up to 10 seconds for `ON` confirmation, then allows 0.5 seconds for the RF receiver to start. Without power confirmation, it cancels the command and logs a warning. This applies to both Home Assistant controls and clocks; commands are queued.
+
+
 The [cc1101_mqtt_central.yaml](./cc1101_mqtt_central.yaml) configuration runs on a separate ESP32, `cc1101-mqtt-central`, at `192.168.1.18`. It receives MQTT actions on `casa/dormitorio/ventilador/set` and `casa/salon/ventilador/set`, resolves their codes from [`assets/codigos_ventiladores.yaml`](./assets/codigos_ventiladores.yaml), and transmits them over RF. Fans, selectors, and buttons are also exposed through the ESPHome API for Home Assistant control. The bridge handles RF transmission. Remote capture uses the separate device below.
+
+The bridge ESP32 also acts as an active Bluetooth proxy for Home Assistant, with active scanning configured and up to three simultaneous connections (`max_connections: 3` and `connection_slots: 3`). It shares the device with MQTT control and RF transmission.
+
+Light color and timer selectors execute commands through `set_action` when a selection is requested from Home Assistant or MQTT. Publishing their initial state does not transmit an RF command. Their state is optimistic: it represents the requested selection, without confirmation from the fan receiver.
 
 ### RF remote capture tool
 
@@ -367,6 +374,10 @@ Clocks publish with QoS 2 and `retain: false`. The bridge accepts a text `accion
 MQTT actions and native Home Assistant controls use the same table, with values supplied by `assets/codigos_ventiladores.yaml`. The selected code is converted to 32 bits and transmitted with a 390 µs pulse, `[23, 1]` sync, `[1, 2]` zero, `[2, 1]` one, inverted signal, and **2 transmissions separated by 10 ms**. `non_blocking: true` is enabled and the scripts use `queued` mode.
 
 RF capture uses [`capturar_mando_esphome.yaml`](./capturar_mando_esphome.yaml), which shows captured codes in its logs.
+
+The bridge ESP32 also acts as an active Bluetooth proxy for Home Assistant, with active scanning configured and up to three simultaneous connections (`max_connections: 3` and `connection_slots: 3`). It shares the device with MQTT control and RF transmission.
+
+Light color and timer selectors execute commands through `set_action` when a selection is requested from Home Assistant or MQTT. Publishing their initial state does not transmit an RF command. Their state is optimistic: it represents the requested selection, without confirmation from the fan receiver.
 
 ### RF remote capture tool
 

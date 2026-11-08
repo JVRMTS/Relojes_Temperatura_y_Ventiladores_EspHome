@@ -158,6 +158,10 @@ font:
     size: 44
     glyphs: " °!%()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ"
   - file: "gfonts://Roboto@bold"
+    id: fuente_hora
+    size: 50
+    glyphs: " °!%()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ"
+  - file: "gfonts://Roboto@bold"
     id: FSSB18
     size: 28
     glyphs: " °!%()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÁÉÍÓÚÜÑáéíóúüñ"
@@ -475,7 +479,7 @@ lvgl:
             width: 480
             align: TOP_MID
             text: "--:--"
-            text_font: FSSB24
+            text_font: fuente_hora
             text_align: CENTER
             text_color: 0xFFFFFF
             hidden: !lambda |-

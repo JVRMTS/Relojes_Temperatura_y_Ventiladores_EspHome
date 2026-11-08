@@ -96,7 +96,14 @@ Los tres relojes táctiles comparten diseño, hardware y lógica de control, con
 
 ### Puente RF CC1101
 
+El puente consulta el estado `state` de los interruptores Zigbee2MQTT en `zigbee2mqtt/Ventilador Dormitorio` y `zigbee2mqtt/Ventilador Salon` antes de cada orden RF, mediante sus temas `/get`. Si estan apagados o no responden en 2 segundos, publica `{"state":"ON"}` en el tema `/set` correspondiente. Espera hasta 10 segundos la confirmacion `ON` y deja medio segundo para arrancar el receptor antes de transmitir. Si no se confirma la alimentacion, cancela la orden y avisa en el registro. Se aplica a los controles de Home Assistant y a los relojes; las ordenes se procesan en cola.
+
+
 La configuración [cc1101_mqtt_central.yaml](./cc1101_mqtt_central.yaml) corresponde a un ESP32 independiente, `cc1101-mqtt-central`, con IP `192.168.1.18`. Recibe acciones MQTT en `casa/dormitorio/ventilador/set` y `casa/salon/ventilador/set`, busca el código en [`assets/codigos_ventiladores.yaml`](./assets/codigos_ventiladores.yaml) y lo transmite por RF. Expone además ventiladores, selectores y botones mediante la API ESPHome para controlarlos desde Home Assistant. El puente se encarga de la transmisión RF. La captura de mandos corresponde al dispositivo independiente descrito a continuación.
+
+El ESP32 del puente también funciona como proxy Bluetooth activo para Home Assistant, con escaneo activo configurado y hasta tres conexiones simultáneas (`max_connections: 3` y `connection_slots: 3`). Comparte el dispositivo con el control MQTT y la transmisión RF.
+
+Los selectores de color de luz y temporizador ejecutan las órdenes mediante `set_action`, al recibir una selección desde Home Assistant o MQTT. La publicación de su estado inicial no transmite una orden RF. Su estado es optimista: representa la selección solicitada, sin confirmación del receptor del ventilador.
 
 ### Capturador de mandos RF
 
@@ -367,6 +374,10 @@ Los relojes publican con QoS 2 y `retain: false`. El puente acepta `accion` como
 Las acciones MQTT y los controles nativos de Home Assistant utilizan la misma tabla, cuyos valores proceden de `assets/codigos_ventiladores.yaml`. El código elegido se convierte en 32 bits y se transmite con pulso de 390 µs, sincronización `[23, 1]`, cero `[1, 2]`, uno `[2, 1]`, señal invertida y **2 transmisiones con 10 ms entre ellas**. `non_blocking: true` está activo y los scripts están configurados en modo `queued`.
 
 La captura RF se realiza con [`capturar_mando_esphome.yaml`](./capturar_mando_esphome.yaml), que muestra los códigos en sus registros.
+
+El ESP32 del puente también funciona como proxy Bluetooth activo para Home Assistant, con escaneo activo configurado y hasta tres conexiones simultáneas (`max_connections: 3` y `connection_slots: 3`). Comparte el dispositivo con el control MQTT y la transmisión RF.
+
+Los selectores de color de luz y temporizador ejecutan las órdenes mediante `set_action`, al recibir una selección desde Home Assistant o MQTT. La publicación de su estado inicial no transmite una orden RF. Su estado es optimista: representa la selección solicitada, sin confirmación del receptor del ventilador.
 
 ### Capturador de mandos RF
 

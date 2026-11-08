@@ -80,6 +80,15 @@ remote_transmitter:
         - cc1101.set_idle
 
 globals:
+  # -1: desconocido; 0: sin corriente; 1: con corriente.
+  - id: alimentacion_dormitorio
+    type: int
+    restore_value: false
+    initial_value: "-1"
+  - id: alimentacion_salon
+    type: int
+    restore_value: false
+    initial_value: "-1"
   - id: rc_code
     type: std::string
     restore_value: no
@@ -91,6 +100,20 @@ mqtt:
   username: ${mqtt_username}
   password: ${mqtt_password}
   on_json_message:
+    - topic: "zigbee2mqtt/Ventilador Dormitorio"
+      then:
+        - lambda: |-
+            if (!x["state"].is<const char *>()) return;
+            const std::string state = x["state"].as<const char *>();
+            if (state == "ON") id(alimentacion_dormitorio) = 1;
+            else if (state == "OFF") id(alimentacion_dormitorio) = 0;
+    - topic: "zigbee2mqtt/Ventilador Salon"
+      then:
+        - lambda: |-
+            if (!x["state"].is<const char *>()) return;
+            const std::string state = x["state"].as<const char *>();
+            if (state == "ON") id(alimentacion_salon) = 1;
+            else if (state == "OFF") id(alimentacion_salon) = 0;
     - topic: "casa/dormitorio/ventilador/set"
       then:
         - lambda: |-
@@ -108,6 +131,57 @@ mqtt:
             }
             id(transmit_fan_rf_command).execute(2, std::string(x["accion"].as<const char *>()));
 script:
+  - id: asegurar_alimentacion_y_transmitir
+    mode: queued
+    parameters:
+      room: int
+      code: uint32_t
+    then:
+      # Consulta actual: no dar por valido un estado antiguo guardado en memoria.
+      - lambda: |-
+          if (room == 1) id(alimentacion_dormitorio) = -1;
+          else id(alimentacion_salon) = -1;
+      - mqtt.publish:
+          topic: !lambda |-
+            return std::string(room == 1 ? "zigbee2mqtt/Ventilador Dormitorio/get" : "zigbee2mqtt/Ventilador Salon/get");
+          payload: '{"state":""}'
+          retain: false
+      - wait_until:
+          condition:
+            lambda: |-
+              return (room == 1 ? id(alimentacion_dormitorio) : id(alimentacion_salon)) != -1;
+          timeout: 2s
+      - if:
+          condition:
+            lambda: |-
+              return (room == 1 ? id(alimentacion_dormitorio) : id(alimentacion_salon)) != 1;
+          then:
+            - mqtt.publish:
+                topic: !lambda |-
+                  return std::string(room == 1 ? "zigbee2mqtt/Ventilador Dormitorio/set" : "zigbee2mqtt/Ventilador Salon/set");
+                payload: '{"state":"ON"}'
+                retain: false
+            - wait_until:
+                condition:
+                  lambda: |-
+                    return (room == 1 ? id(alimentacion_dormitorio) : id(alimentacion_salon)) == 1;
+                timeout: 10s
+            # Tiempo de arranque del receptor RF tras recuperar la corriente.
+            - delay: 500ms
+      - if:
+          condition:
+            lambda: |-
+              return (room == 1 ? id(alimentacion_dormitorio) : id(alimentacion_salon)) == 1;
+          then:
+            - script.execute:
+                id: transmit_rf_command
+                code: !lambda return code;
+          else:
+            - logger.log:
+                level: WARN
+                tag: rf_fan
+                format: "Orden RF cancelada: no se ha confirmado la alimentacion Zigbee"
+
   - id: transmit_rf_command
     mode: queued
     parameters:
@@ -166,7 +240,7 @@ script:
           }
           for (const auto &comando : comandos) {
             if (accion == comando.accion) {
-              id(transmit_rf_command).execute(room == 1 ? comando.dormitorio : comando.salon);
+              id(asegurar_alimentacion_y_transmitir).execute(room, room == 1 ? comando.dormitorio : comando.salon);
               return;
             }
           }
@@ -224,7 +298,7 @@ select:
       - "Blanca"
       - "Azul"
     optimistic: true
-    on_value:
+    set_action:
       - script.execute:
           id: transmit_fan_rf_command
           room: 1
@@ -241,7 +315,7 @@ select:
       - "Blanca"
       - "Azul"
     optimistic: true
-    on_value:
+    set_action:
       - script.execute:
           id: transmit_fan_rf_command
           room: 2
@@ -258,7 +332,7 @@ select:
       - "4h"
       - "8h"
     optimistic: true
-    on_value:
+    set_action:
       - script.execute:
           id: transmit_fan_rf_command
           room: 1
@@ -275,7 +349,7 @@ select:
       - "4h"
       - "8h"
     optimistic: true
-    on_value:
+    set_action:
       - script.execute:
           id: transmit_fan_rf_command
           room: 2
@@ -343,3 +417,12 @@ button:
           id: transmit_fan_rf_command
           room: 2
           accion: "invertir_giro"
+
+esp32_ble:
+  max_connections: 3
+esp32_ble_tracker:
+  scan_parameters:
+    active: true   
+bluetooth_proxy:
+  active: true
+  connection_slots: 3
