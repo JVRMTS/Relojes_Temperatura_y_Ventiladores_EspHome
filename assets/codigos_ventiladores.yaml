@@ -1,3 +1,5 @@
+# Autor: @JMTS
+# Creado: 2026-11-07
 # CODIGOS RF DE LOS VENTILADORES
 # Edita solo los numeros entre comillas; son codigos decimales de 32 bits.
 # Usa capturar_mando_esphome.yaml para obtener los codigos de tu mando.

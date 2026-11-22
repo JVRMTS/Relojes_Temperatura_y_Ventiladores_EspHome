@@ -1,3 +1,6 @@
+# Autor: @JMTS
+# Creado: 2026-10-18
+
 substitutions:
   device_name: cc1101-mqtt-central
   friendly_name: CC1101 MQTT Central
